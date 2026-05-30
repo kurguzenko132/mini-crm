@@ -125,7 +125,7 @@ export const demoQuestions: MarketingQuestionInput[] = [
     optionsText: '',
     is_required: true,
     is_active: true,
-    sort_order: 10,
+    sort_order: 1,
   },
   {
     text: 'Чем сейчас пользуетесь для записи клиентов и учета?',
@@ -134,7 +134,7 @@ export const demoQuestions: MarketingQuestionInput[] = [
     optionsText: '',
     is_required: true,
     is_active: true,
-    sort_order: 20,
+    sort_order: 2,
   },
   {
     text: 'Сколько клиентов в среднем приходит в месяц?',
@@ -143,7 +143,7 @@ export const demoQuestions: MarketingQuestionInput[] = [
     optionsText: '',
     is_required: false,
     is_active: true,
-    sort_order: 30,
+    sort_order: 3,
   },
   {
     text: 'Готовы ли вы протестировать сервис до официального запуска?',
@@ -152,7 +152,7 @@ export const demoQuestions: MarketingQuestionInput[] = [
     optionsText: '',
     is_required: true,
     is_active: true,
-    sort_order: 40,
+    sort_order: 4,
   },
   {
     text: 'Какие условия для старта вам подходят?',
@@ -161,7 +161,7 @@ export const demoQuestions: MarketingQuestionInput[] = [
     optionsText: 'Бесплатно 1 месяц, Бесплатно 2 месяца, Пониженный прайс, Индивидуальные условия, Готовы платить сразу',
     is_required: true,
     is_active: true,
-    sort_order: 50,
+    sort_order: 5,
   },
   {
     text: 'Какая функция была бы самой ценной в первый месяц?',
@@ -170,7 +170,7 @@ export const demoQuestions: MarketingQuestionInput[] = [
     optionsText: '',
     is_required: false,
     is_active: true,
-    sort_order: 60,
+    sort_order: 6,
   },
   {
     text: 'Что может помешать вам начать пользоваться сервисом?',
@@ -179,7 +179,7 @@ export const demoQuestions: MarketingQuestionInput[] = [
     optionsText: '',
     is_required: false,
     is_active: true,
-    sort_order: 70,
+    sort_order: 7,
   },
   {
     text: 'Можно ли использовать ваш бизнес как публичный кейс после запуска?',
@@ -188,6 +188,6 @@ export const demoQuestions: MarketingQuestionInput[] = [
     optionsText: '',
     is_required: false,
     is_active: true,
-    sort_order: 80,
+    sort_order: 8,
   },
 ];

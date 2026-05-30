@@ -73,7 +73,7 @@ const emptyQuestionInput: MarketingQuestionInput = {
   optionsText: '',
   is_required: false,
   is_active: true,
-  sort_order: 10,
+  sort_order: 1,
 };
 
 const priorityLabel: Record<Priority, string> = {
@@ -352,7 +352,7 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
 
   function openCreateQuestionModal() {
     setEditingQuestion(null);
-    setQuestionForm({ ...emptyQuestionInput, sort_order: (questions.length + 1) * 10 });
+    setQuestionForm({ ...emptyQuestionInput, sort_order: questions.length + 1 });
     setQuestionModalOpen(true);
   }
 
