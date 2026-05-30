@@ -30,6 +30,27 @@ type Props = {
 
 type ViewMode = 'table' | 'stages' | 'analytics' | 'questions';
 
+const viewModeLabel: Record<ViewMode, string> = {
+  table: 'Пользователи',
+  stages: 'Воронка',
+  analytics: 'Аналитика',
+  questions: 'Интервью',
+};
+
+const viewModeDescription: Record<ViewMode, string> = {
+  table: 'Отслеживание первых клиентов перед запуском компании',
+  stages: 'Доска этапов по всей маркетинговой воронке',
+  analytics: 'Метрики по каналам, сегментам и качеству интервью',
+  questions: 'Единый список вопросов, которые нужно узнать у каждого клиента',
+};
+
+const navigationItems: Array<{ mode: ViewMode; label: string }> = [
+  { mode: 'table', label: 'Пользователи' },
+  { mode: 'questions', label: 'Интервью' },
+  { mode: 'stages', label: 'Воронка' },
+  { mode: 'analytics', label: 'Аналитика' },
+];
+
 const emptyInput: EarlyUserInput = {
   name: '',
   city: 'Минск',
@@ -645,7 +666,7 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
     const element = document.getElementById('stats-export-area');
     if (!element) return;
     const html2canvas = (await import('html2canvas')).default;
-    const canvas = await html2canvas(element, { backgroundColor: '#f6f8fb', scale: 2 });
+    const canvas = await html2canvas(element, { backgroundColor: '#080b12', scale: 2 });
     const link = document.createElement('a');
     link.href = canvas.toDataURL('image/png');
     link.download = `pilotbase-stats-${localDateStamp()}.png`;
@@ -662,15 +683,22 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
       <aside className="sidebar">
         <div className="sidebar-brand">
           <div className="brand-mark">P</div>
-          <span>PilotBase</span>
+          <div>
+            <span>PilotBase</span>
+            <small>Marketing cockpit</small>
+          </div>
         </div>
         <nav className="sidebar-nav" aria-label="Основное меню">
-          <button className={viewMode === 'table' ? 'active' : ''} type="button" onClick={() => setViewMode('table')}>Главная</button>
-          <button className={viewMode === 'table' ? 'active' : ''} type="button" onClick={() => setViewMode('table')}>Пользователи</button>
-          <button className={viewMode === 'questions' ? 'active' : ''} type="button" onClick={() => setViewMode('questions')}>Вопросы</button>
-          <button className={viewMode === 'stages' ? 'active' : ''} type="button" onClick={() => setViewMode('stages')}>Этапы</button>
-          <button className={viewMode === 'analytics' ? 'active' : ''} type="button" onClick={() => setViewMode('analytics')}>Статистика</button>
-          <button type="button">Настройки</button>
+          {navigationItems.map((item) => (
+            <button
+              key={item.mode}
+              className={viewMode === item.mode ? 'active' : ''}
+              type="button"
+              onClick={() => setViewMode(item.mode)}
+            >
+              {item.label}
+            </button>
+          ))}
         </nav>
         <div className="sidebar-footer">
           <div className="avatar">{getInitials(userEmail)}</div>
@@ -685,13 +713,13 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
       <main className="main-content">
         <header className="topbar">
           <div>
-            <h1>{viewMode === 'questions' ? 'Маркетинговые вопросы' : 'Ранние пользователи'}</h1>
-            <p>{viewMode === 'questions' ? 'Список вопросов, которые нужно узнать у каждого человека' : 'Отслеживание первых клиентов перед запуском компании'}</p>
+            <h1>{viewModeLabel[viewMode]}</h1>
+            <p>{viewModeDescription[viewMode]}</p>
           </div>
           <div className="topbar-actions">
             <div className="search-box">
               <span>⌕</span>
-              <input value={filters.search} onChange={(event) => updateFilter('search', event.target.value)} placeholder="Поиск по названию, городу или отрасли" />
+              <input value={filters.search} onChange={(event) => updateFilter('search', event.target.value)} placeholder="Поиск по имени, городу, отрасли, заметкам" />
             </div>
             {viewMode === 'questions' ? (
               <button className="primary-button" onClick={openCreateQuestionModal} type="button">+ Добавить вопрос</button>
@@ -764,10 +792,16 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
         )}
 
         <div className="view-switch">
-          <button className={viewMode === 'table' ? 'active' : ''} onClick={() => setViewMode('table')} type="button">Таблица</button>
-          <button className={viewMode === 'questions' ? 'active' : ''} onClick={() => setViewMode('questions')} type="button">Вопросы</button>
-          <button className={viewMode === 'stages' ? 'active' : ''} onClick={() => setViewMode('stages')} type="button">Этапы</button>
-          <button className={viewMode === 'analytics' ? 'active' : ''} onClick={() => setViewMode('analytics')} type="button">Аналитика</button>
+          {navigationItems.map((item) => (
+            <button
+              key={item.mode}
+              className={viewMode === item.mode ? 'active' : ''}
+              onClick={() => setViewMode(item.mode)}
+              type="button"
+            >
+              {item.label}
+            </button>
+          ))}
           <div className="export-actions">
             <button className="secondary-button" onClick={exportCsv} type="button">CSV</button>
             <button className="secondary-button" onClick={exportAnswersCsv} type="button">CSV ответы</button>
