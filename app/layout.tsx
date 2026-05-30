@@ -9,7 +9,7 @@ const bodyFont = IBM_Plex_Sans({
 });
 
 const displayFont = Space_Grotesk({
-  subsets: ['latin', 'cyrillic'],
+  subsets: ['latin'],
   weight: ['500', '600', '700'],
   variable: '--font-display',
 });
