@@ -54,9 +54,20 @@ create trigger set_user_question_answers_updated_at
 before update on public.user_question_answers
 for each row execute function public.set_updated_at();
 
+-- Shared workspace mode: all authenticated users work with one common base.
+alter table if exists public.early_users enable row level security;
+alter table if exists public.early_user_events enable row level security;
 alter table public.marketing_questions enable row level security;
 alter table public.user_question_answers enable row level security;
 
+drop policy if exists "early_users_select_own" on public.early_users;
+drop policy if exists "early_users_insert_own" on public.early_users;
+drop policy if exists "early_users_update_own" on public.early_users;
+drop policy if exists "early_users_delete_own" on public.early_users;
+drop policy if exists "early_user_events_select_own" on public.early_user_events;
+drop policy if exists "early_user_events_insert_own" on public.early_user_events;
+drop policy if exists "early_user_events_update_own" on public.early_user_events;
+drop policy if exists "early_user_events_delete_own" on public.early_user_events;
 drop policy if exists "marketing_questions_select_own" on public.marketing_questions;
 drop policy if exists "marketing_questions_insert_own" on public.marketing_questions;
 drop policy if exists "marketing_questions_update_own" on public.marketing_questions;
@@ -66,20 +77,49 @@ drop policy if exists "user_question_answers_insert_own" on public.user_question
 drop policy if exists "user_question_answers_update_own" on public.user_question_answers;
 drop policy if exists "user_question_answers_delete_own" on public.user_question_answers;
 
-create policy "marketing_questions_select_own" on public.marketing_questions for select to authenticated using (auth.uid() = owner_id);
-create policy "marketing_questions_insert_own" on public.marketing_questions for insert to authenticated with check (auth.uid() = owner_id);
-create policy "marketing_questions_update_own" on public.marketing_questions for update to authenticated using (auth.uid() = owner_id) with check (auth.uid() = owner_id);
-create policy "marketing_questions_delete_own" on public.marketing_questions for delete to authenticated using (auth.uid() = owner_id);
+drop policy if exists "early_users_select_shared" on public.early_users;
+drop policy if exists "early_users_insert_shared" on public.early_users;
+drop policy if exists "early_users_update_shared" on public.early_users;
+drop policy if exists "early_users_delete_shared" on public.early_users;
+drop policy if exists "early_user_events_select_shared" on public.early_user_events;
+drop policy if exists "early_user_events_insert_shared" on public.early_user_events;
+drop policy if exists "early_user_events_update_shared" on public.early_user_events;
+drop policy if exists "early_user_events_delete_shared" on public.early_user_events;
+drop policy if exists "marketing_questions_select_shared" on public.marketing_questions;
+drop policy if exists "marketing_questions_insert_shared" on public.marketing_questions;
+drop policy if exists "marketing_questions_update_shared" on public.marketing_questions;
+drop policy if exists "marketing_questions_delete_shared" on public.marketing_questions;
+drop policy if exists "user_question_answers_select_shared" on public.user_question_answers;
+drop policy if exists "user_question_answers_insert_shared" on public.user_question_answers;
+drop policy if exists "user_question_answers_update_shared" on public.user_question_answers;
+drop policy if exists "user_question_answers_delete_shared" on public.user_question_answers;
 
-create policy "user_question_answers_select_own" on public.user_question_answers for select to authenticated using (auth.uid() = owner_id);
-create policy "user_question_answers_insert_own" on public.user_question_answers for insert to authenticated with check (
-  auth.uid() = owner_id
-  and exists (select 1 from public.early_users eu where eu.id = early_user_id and eu.owner_id = auth.uid())
-  and exists (select 1 from public.marketing_questions mq where mq.id = question_id and mq.owner_id = auth.uid())
+create policy "early_users_select_shared" on public.early_users for select to authenticated using (true);
+create policy "early_users_insert_shared" on public.early_users for insert to authenticated with check (true);
+create policy "early_users_update_shared" on public.early_users for update to authenticated using (true) with check (true);
+create policy "early_users_delete_shared" on public.early_users for delete to authenticated using (true);
+
+create policy "early_user_events_select_shared" on public.early_user_events for select to authenticated using (true);
+create policy "early_user_events_insert_shared" on public.early_user_events for insert to authenticated with check (
+  exists (select 1 from public.early_users eu where eu.id = early_user_id)
 );
-create policy "user_question_answers_update_own" on public.user_question_answers for update to authenticated using (auth.uid() = owner_id) with check (
-  auth.uid() = owner_id
-  and exists (select 1 from public.early_users eu where eu.id = early_user_id and eu.owner_id = auth.uid())
-  and exists (select 1 from public.marketing_questions mq where mq.id = question_id and mq.owner_id = auth.uid())
+create policy "early_user_events_update_shared" on public.early_user_events for update to authenticated using (true) with check (
+  exists (select 1 from public.early_users eu where eu.id = early_user_id)
 );
-create policy "user_question_answers_delete_own" on public.user_question_answers for delete to authenticated using (auth.uid() = owner_id);
+create policy "early_user_events_delete_shared" on public.early_user_events for delete to authenticated using (true);
+
+create policy "marketing_questions_select_shared" on public.marketing_questions for select to authenticated using (true);
+create policy "marketing_questions_insert_shared" on public.marketing_questions for insert to authenticated with check (true);
+create policy "marketing_questions_update_shared" on public.marketing_questions for update to authenticated using (true) with check (true);
+create policy "marketing_questions_delete_shared" on public.marketing_questions for delete to authenticated using (true);
+
+create policy "user_question_answers_select_shared" on public.user_question_answers for select to authenticated using (true);
+create policy "user_question_answers_insert_shared" on public.user_question_answers for insert to authenticated with check (
+  exists (select 1 from public.early_users eu where eu.id = early_user_id)
+  and exists (select 1 from public.marketing_questions mq where mq.id = question_id)
+);
+create policy "user_question_answers_update_shared" on public.user_question_answers for update to authenticated using (true) with check (
+  exists (select 1 from public.early_users eu where eu.id = early_user_id)
+  and exists (select 1 from public.marketing_questions mq where mq.id = question_id)
+);
+create policy "user_question_answers_delete_shared" on public.user_question_answers for delete to authenticated using (true);
