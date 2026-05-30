@@ -303,6 +303,34 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
     setAnswers((answersResult.data ?? []) as UserAnswer[]);
   }
 
+  async function normalizeQuestionOrder(sourceQuestions: MarketingQuestion[]) {
+    const sorted = [...sourceQuestions].sort((a, b) => a.sort_order - b.sort_order || a.created_at.localeCompare(b.created_at));
+    const normalized = sorted.map((question, index) => ({ ...question, sort_order: index + 1 }));
+    const initialOrderById = new Map(sourceQuestions.map((question) => [question.id, question.sort_order]));
+    const changed = normalized.filter((question) => initialOrderById.get(question.id) !== question.sort_order);
+
+    if (changed.length === 0) {
+      setQuestions(normalized);
+      return true;
+    }
+
+    const updateResults = await Promise.all(
+      changed.map((question) => supabase
+        .from('marketing_questions')
+        .update({ sort_order: question.sort_order })
+        .eq('id', question.id)),
+    );
+    const failed = updateResults.find((result) => result.error)?.error;
+
+    if (failed) {
+      setNotice(failed.message);
+      return false;
+    }
+
+    setQuestions(normalized);
+    return true;
+  }
+
   async function loadEvents(userId: string, requestId = selectionRequestRef.current) {
     const { data, error } = await supabase
       .from('early_user_events')
@@ -507,7 +535,11 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
     try {
       const { error } = await supabase.from('marketing_questions').delete().eq('id', question.id);
       if (error) throw error;
-      setQuestions((current) => current.filter((item) => item.id !== question.id));
+      const remainingQuestions = questions.filter((item) => item.id !== question.id);
+      const normalized = await normalizeQuestionOrder(remainingQuestions);
+      if (!normalized) {
+        await refreshQuestionsAndAnswers();
+      }
       setAnswers((current) => current.filter((answer) => answer.question_id !== question.id));
       setAnswerDrafts((current) => {
         const next = { ...current };
