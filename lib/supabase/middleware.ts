@@ -22,6 +22,12 @@ export async function updateSession(request: NextRequest) {
     },
   });
 
-  await supabase.auth.getUser();
+  // Avoid a network round-trip on every request in Proxy.
+  // getClaims validates the JWT and refreshes cookies when needed.
+  try {
+    await supabase.auth.getClaims();
+  } catch {
+    // Let page-level auth checks handle failures gracefully.
+  }
   return response;
 }

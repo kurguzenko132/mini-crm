@@ -35,5 +35,8 @@
     "lib": "lib"
   },
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "engines": {
+    "node": ">=20.9.0"
+  }
 }
