@@ -182,6 +182,12 @@ function localDateStamp(date = new Date()) {
   return `${year}-${month}-${day}`;
 }
 
+function addDaysStamp(date: string | null, days: number) {
+  const start = date ? new Date(`${date}T00:00:00`) : new Date();
+  start.setDate(start.getDate() + days);
+  return localDateStamp(start);
+}
+
 function classForStage(stage: string) {
   if (['Подключён', 'Активно пользуется'].includes(stage)) return 'green';
   if (['Интерес есть', 'Связались', 'Отправлены условия'].includes(stage)) return 'blue';
@@ -248,16 +254,19 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
   const cityStats = useMemo(() => topCounts(filteredUsers, 'city', 7), [filteredUsers]);
   const industryStats = useMemo(() => topCounts(filteredUsers, 'industry', 7), [filteredUsers]);
   const termsStats = useMemo(() => topCounts(filteredUsers, 'terms', 7), [filteredUsers]);
-  const activeQuestions = useMemo(
-    () => questions.filter((question) => question.is_active).sort((a, b) => a.sort_order - b.sort_order || a.created_at.localeCompare(b.created_at)),
+  const questionsSorted = useMemo(
+    () => [...questions].sort((a, b) => a.sort_order - b.sort_order || a.created_at.localeCompare(b.created_at)),
     [questions],
   );
+  const questionOrderIndex = useMemo(
+    () => new Map(questionsSorted.map((question, index) => [question.id, index])),
+    [questionsSorted],
+  );
+  const activeQuestions = useMemo(() => questionsSorted.filter((question) => question.is_active), [questionsSorted]);
   const visibleQuestions = useMemo(() => {
-    const scoped = questionRoleTab === 'all'
-      ? questions
-      : questions.filter((question) => question.target_role === 'all' || question.target_role === questionRoleTab);
-    return [...scoped].sort((a, b) => a.sort_order - b.sort_order || a.created_at.localeCompare(b.created_at));
-  }, [questions, questionRoleTab]);
+    if (questionRoleTab === 'all') return questionsSorted;
+    return questionsSorted.filter((question) => question.target_role === 'all' || question.target_role === questionRoleTab);
+  }, [questionsSorted, questionRoleTab]);
   const visibleActiveQuestions = useMemo(() => visibleQuestions.filter((question) => question.is_active), [visibleQuestions]);
   const selectedQuestions = useMemo(() => {
     if (!selected) return visibleActiveQuestions;
@@ -636,6 +645,70 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
     setQuestions((current) => current.map((item) => (item.id === updated.id ? updated : item)));
   }
 
+  async function moveQuestion(question: MarketingQuestion, direction: -1 | 1) {
+    const currentIndex = questionOrderIndex.get(question.id);
+    if (currentIndex === undefined) return;
+    const neighborIndex = currentIndex + direction;
+    if (neighborIndex < 0 || neighborIndex >= questionsSorted.length) return;
+
+    const neighbor = questionsSorted[neighborIndex];
+    const updates = [
+      { id: question.id, sort_order: neighbor.sort_order },
+      { id: neighbor.id, sort_order: question.sort_order },
+    ];
+
+    setLoading(true);
+    try {
+      const results = await Promise.all(
+        updates.map((item) => supabase.from('marketing_questions').update({ sort_order: item.sort_order }).eq('id', item.id)),
+      );
+      const failed = results.find((result) => result.error)?.error;
+      if (failed) throw failed;
+
+      setQuestions((current) => current.map((item) => {
+        if (item.id === question.id) return { ...item, sort_order: neighbor.sort_order };
+        if (item.id === neighbor.id) return { ...item, sort_order: question.sort_order };
+        return item;
+      }));
+    } catch (caught) {
+      setNotice(caught instanceof Error ? caught.message : 'Не удалось изменить порядок вопроса.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function duplicateQuestion(question: MarketingQuestion) {
+    const payload = {
+      target_role: question.target_role,
+      text: `${question.text} (копия)`,
+      category: question.category,
+      type: question.type,
+      options: question.options,
+      is_required: question.is_required,
+      is_active: question.is_active,
+      sort_order: questions.length + 1,
+    };
+
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('marketing_questions')
+        .insert(payload)
+        .select('*')
+        .single();
+      if (error) throw error;
+
+      const created = sanitizeQuestion(data as MarketingQuestion);
+      const normalized = await normalizeQuestionOrder([...questions, created]);
+      if (!normalized) await refreshQuestionsAndAnswers();
+      setNotice('Вопрос скопирован.');
+    } catch (caught) {
+      setNotice(caught instanceof Error ? caught.message : 'Не удалось скопировать вопрос.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function handleStageQuickChange(user: EarlyUser, stage: Stage) {
     if (user.stage === stage) return;
     const { data, error } = await supabase
@@ -653,6 +726,27 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
     setUsers((current) => current.map((item) => (item.id === user.id ? updated : item)));
     setSelected((current) => (current?.id === user.id ? updated : current));
     await addEvent(user.id, `Этап изменён: ${user.stage} → ${stage}`, 'stage_changed');
+    if (selected?.id === user.id) await loadEvents(user.id);
+  }
+
+  async function rescheduleNextContact(user: EarlyUser, days: number) {
+    const nextDate = addDaysStamp(user.next_contact_date, days);
+    const { data, error } = await supabase
+      .from('early_users')
+      .update({ next_contact_date: nextDate })
+      .eq('id', user.id)
+      .select('*')
+      .single();
+
+    if (error) {
+      setNotice(error.message);
+      return;
+    }
+
+    const updated = sanitizeUser(data as EarlyUser);
+    setUsers((current) => current.map((item) => (item.id === user.id ? updated : item)));
+    setSelected((current) => (current?.id === user.id ? updated : current));
+    await addEvent(user.id, `Следующий контакт перенесён на ${formatDate(nextDate)}`, 'contact');
     if (selected?.id === user.id) await loadEvents(user.id);
   }
 
@@ -1061,9 +1155,26 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
                         <td>{getQuestionAnswerCount(question.id)}</td>
                         <td>
                           <div className="row-actions question-actions">
-                            <button onClick={() => toggleQuestionActive(question)} type="button">{question.is_active ? 'Скрыть' : 'Вкл.'}</button>
-                            <button onClick={() => openEditQuestionModal(question)} type="button">Изм.</button>
-                            <button onClick={() => handleDeleteQuestion(question)} type="button">Удал.</button>
+                            <button
+                              disabled={loading || (questionOrderIndex.get(question.id) ?? 0) === 0}
+                              onClick={() => moveQuestion(question, -1)}
+                              type="button"
+                              title="Поднять выше"
+                            >
+                              ↑
+                            </button>
+                            <button
+                              disabled={loading || (questionOrderIndex.get(question.id) ?? 0) >= questionsSorted.length - 1}
+                              onClick={() => moveQuestion(question, 1)}
+                              type="button"
+                              title="Опустить ниже"
+                            >
+                              ↓
+                            </button>
+                            <button disabled={loading} onClick={() => duplicateQuestion(question)} type="button">Копия</button>
+                            <button disabled={loading} onClick={() => toggleQuestionActive(question)} type="button">{question.is_active ? 'Скрыть' : 'Вкл.'}</button>
+                            <button disabled={loading} onClick={() => openEditQuestionModal(question)} type="button">Изм.</button>
+                            <button disabled={loading} onClick={() => handleDeleteQuestion(question)} type="button">Удал.</button>
                           </div>
                         </td>
                       </tr>
@@ -1180,6 +1291,16 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
               {STAGES.map((stage) => (
                 <button className={selected.stage === stage ? 'active' : ''} key={stage} onClick={() => handleStageQuickChange(selected, stage)} type="button">{stage}</button>
               ))}
+            </div>
+          </section>
+
+          <section className="mini-section">
+            <h3>План контакта</h3>
+            <div className="schedule-chips">
+              <button onClick={() => rescheduleNextContact(selected, 1)} type="button">+1 день</button>
+              <button onClick={() => rescheduleNextContact(selected, 3)} type="button">+3 дня</button>
+              <button onClick={() => rescheduleNextContact(selected, 7)} type="button">+7 дней</button>
+              <button onClick={() => rescheduleNextContact(selected, 14)} type="button">+14 дней</button>
             </div>
           </section>
 

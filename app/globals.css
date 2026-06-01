@@ -1291,6 +1291,30 @@ td small {
   color: #9af7da;
 }
 
+.schedule-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.schedule-chips button {
+  border: 1px solid rgba(104, 171, 255, 0.34);
+  border-radius: 999px;
+  background: rgba(16, 30, 52, 0.88);
+  color: #c5dcff;
+  padding: 7px 12px;
+  font-size: 12px;
+  font-weight: 760;
+  transition: transform 0.18s, border-color 0.18s, background 0.18s, color 0.18s;
+}
+
+.schedule-chips button:hover {
+  transform: translateY(-1px);
+  border-color: rgba(109, 178, 255, 0.6);
+  background: rgba(22, 38, 64, 0.92);
+  color: #e6f0ff;
+}
+
 .timeline {
   display: grid;
   gap: 11px;
@@ -1473,11 +1497,12 @@ td small {
 }
 
 .question-actions {
-  min-width: 190px;
+  min-width: 320px;
+  flex-wrap: wrap;
 }
 
 .question-actions button:first-child {
-  min-width: 62px;
+  min-width: 48px;
 }
 
 .category-cloud {
