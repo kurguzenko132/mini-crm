@@ -5,7 +5,7 @@ create extension if not exists pgcrypto;
 
 create table if not exists public.early_users (
   id uuid primary key default gen_random_uuid(),
-  owner_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  owner_id uuid default auth.uid() references auth.users(id) on delete cascade,
   name text not null check (length(trim(name)) > 0),
   city text not null check (length(trim(city)) > 0),
   industry text not null check (length(trim(industry)) > 0),
@@ -27,7 +27,7 @@ create table if not exists public.early_users (
 
 create table if not exists public.early_user_events (
   id uuid primary key default gen_random_uuid(),
-  owner_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  owner_id uuid default auth.uid() references auth.users(id) on delete cascade,
   early_user_id uuid not null references public.early_users(id) on delete cascade,
   type text not null default 'note' check (type in ('created', 'updated', 'stage_changed', 'note', 'contact', 'deleted')),
   title text not null check (length(trim(title)) > 0),
@@ -37,7 +37,7 @@ create table if not exists public.early_user_events (
 
 create table if not exists public.marketing_questions (
   id uuid primary key default gen_random_uuid(),
-  owner_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  owner_id uuid default auth.uid() references auth.users(id) on delete cascade,
   text text not null check (length(trim(text)) > 0),
   category text not null default 'Общее',
   type text not null default 'long_text' check (type in ('short_text', 'long_text', 'number', 'yes_no', 'single_choice')),
@@ -51,7 +51,7 @@ create table if not exists public.marketing_questions (
 
 create table if not exists public.user_question_answers (
   id uuid primary key default gen_random_uuid(),
-  owner_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  owner_id uuid default auth.uid() references auth.users(id) on delete cascade,
   early_user_id uuid not null references public.early_users(id) on delete cascade,
   question_id uuid not null references public.marketing_questions(id) on delete cascade,
   answer_text text,
@@ -103,7 +103,7 @@ alter table public.early_user_events enable row level security;
 alter table public.marketing_questions enable row level security;
 alter table public.user_question_answers enable row level security;
 
--- Shared workspace mode: all authenticated users work in one common base.
+-- Public workspace mode: everyone (anon + authenticated) works in one common base.
 drop policy if exists "early_users_select_own" on public.early_users;
 drop policy if exists "early_users_insert_own" on public.early_users;
 drop policy if exists "early_users_update_own" on public.early_users;
@@ -138,32 +138,32 @@ drop policy if exists "user_question_answers_insert_shared" on public.user_quest
 drop policy if exists "user_question_answers_update_shared" on public.user_question_answers;
 drop policy if exists "user_question_answers_delete_shared" on public.user_question_answers;
 
-create policy "early_users_select_shared" on public.early_users for select to authenticated using (true);
-create policy "early_users_insert_shared" on public.early_users for insert to authenticated with check (true);
-create policy "early_users_update_shared" on public.early_users for update to authenticated using (true) with check (true);
-create policy "early_users_delete_shared" on public.early_users for delete to authenticated using (true);
+create policy "early_users_select_shared" on public.early_users for select to anon, authenticated using (true);
+create policy "early_users_insert_shared" on public.early_users for insert to anon, authenticated with check (true);
+create policy "early_users_update_shared" on public.early_users for update to anon, authenticated using (true) with check (true);
+create policy "early_users_delete_shared" on public.early_users for delete to anon, authenticated using (true);
 
-create policy "early_user_events_select_shared" on public.early_user_events for select to authenticated using (true);
-create policy "early_user_events_insert_shared" on public.early_user_events for insert to authenticated with check (
+create policy "early_user_events_select_shared" on public.early_user_events for select to anon, authenticated using (true);
+create policy "early_user_events_insert_shared" on public.early_user_events for insert to anon, authenticated with check (
   exists (select 1 from public.early_users eu where eu.id = early_user_id)
 );
-create policy "early_user_events_update_shared" on public.early_user_events for update to authenticated using (true) with check (
+create policy "early_user_events_update_shared" on public.early_user_events for update to anon, authenticated using (true) with check (
   exists (select 1 from public.early_users eu where eu.id = early_user_id)
 );
-create policy "early_user_events_delete_shared" on public.early_user_events for delete to authenticated using (true);
+create policy "early_user_events_delete_shared" on public.early_user_events for delete to anon, authenticated using (true);
 
-create policy "marketing_questions_select_shared" on public.marketing_questions for select to authenticated using (true);
-create policy "marketing_questions_insert_shared" on public.marketing_questions for insert to authenticated with check (true);
-create policy "marketing_questions_update_shared" on public.marketing_questions for update to authenticated using (true) with check (true);
-create policy "marketing_questions_delete_shared" on public.marketing_questions for delete to authenticated using (true);
+create policy "marketing_questions_select_shared" on public.marketing_questions for select to anon, authenticated using (true);
+create policy "marketing_questions_insert_shared" on public.marketing_questions for insert to anon, authenticated with check (true);
+create policy "marketing_questions_update_shared" on public.marketing_questions for update to anon, authenticated using (true) with check (true);
+create policy "marketing_questions_delete_shared" on public.marketing_questions for delete to anon, authenticated using (true);
 
-create policy "user_question_answers_select_shared" on public.user_question_answers for select to authenticated using (true);
-create policy "user_question_answers_insert_shared" on public.user_question_answers for insert to authenticated with check (
+create policy "user_question_answers_select_shared" on public.user_question_answers for select to anon, authenticated using (true);
+create policy "user_question_answers_insert_shared" on public.user_question_answers for insert to anon, authenticated with check (
   exists (select 1 from public.early_users eu where eu.id = early_user_id)
   and exists (select 1 from public.marketing_questions mq where mq.id = question_id)
 );
-create policy "user_question_answers_update_shared" on public.user_question_answers for update to authenticated using (true) with check (
+create policy "user_question_answers_update_shared" on public.user_question_answers for update to anon, authenticated using (true) with check (
   exists (select 1 from public.early_users eu where eu.id = early_user_id)
   and exists (select 1 from public.marketing_questions mq where mq.id = question_id)
 );
-create policy "user_question_answers_delete_shared" on public.user_question_answers for delete to authenticated using (true);
+create policy "user_question_answers_delete_shared" on public.user_question_answers for delete to anon, authenticated using (true);

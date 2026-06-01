@@ -1,7 +1,6 @@
 'use client';
 
 import { useMemo, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { CONDITIONS, DEFAULT_CITIES, DEFAULT_INDUSTRIES, PRIORITIES, STAGES } from '@/lib/constants';
 import { demoQuestions, demoUsers } from '@/lib/demo-data';
 import { downloadTextFile, usersToCsv } from '@/lib/export';
@@ -25,7 +24,6 @@ type Props = {
   initialQuestions: MarketingQuestion[];
   initialAnswers: UserAnswer[];
   initialError: string | null;
-  userEmail: string;
 };
 
 type ViewMode = 'table' | 'stages' | 'analytics' | 'questions';
@@ -162,19 +160,13 @@ function classForTerms(terms: string) {
   return 'blue';
 }
 
-function getInitials(email: string) {
-  const part = email.split('@')[0] || 'PB';
-  return part.slice(0, 2).toUpperCase();
-}
-
 function escapeCsv(value: string | number | null | undefined) {
   const text = String(value ?? '');
   if (/[";\n\r]/.test(text)) return `"${text.replaceAll('"', '""')}"`;
   return text;
 }
 
-export default function DashboardClient({ initialUsers, initialQuestions, initialAnswers, initialError, userEmail }: Props) {
-  const router = useRouter();
+export default function DashboardClient({ initialUsers, initialQuestions, initialAnswers, initialError }: Props) {
   const supabase = useMemo(() => createClient(), []);
   const selectionRequestRef = useRef(0);
   const selectedUserIdRef = useRef<string | null>(null);
@@ -666,12 +658,6 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
     }
   }
 
-  async function handleLogout() {
-    await supabase.auth.signOut();
-    router.push('/login');
-    router.refresh();
-  }
-
   function exportCsv() {
     downloadTextFile(`pilotbase-users-${localDateStamp()}.csv`, usersToCsv(filteredUsers), 'text/csv;charset=utf-8');
   }
@@ -733,12 +719,12 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
           ))}
         </nav>
         <div className="sidebar-footer">
-          <div className="avatar">{getInitials(userEmail)}</div>
+          <div className="avatar">PB</div>
           <div className="sidebar-user">
-            <strong>{userEmail}</strong>
-            <span>Администратор</span>
+            <strong>Общая база</strong>
+            <span>Доступ без регистрации</span>
           </div>
-          <button className="ghost-icon" onClick={handleLogout} title="Выйти" type="button">↗</button>
+          <div className="ghost-icon" aria-hidden="true">∞</div>
         </div>
       </aside>
 
