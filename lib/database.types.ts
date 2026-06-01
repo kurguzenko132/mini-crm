@@ -6,7 +6,8 @@ export type Database = {
       early_users: {
         Row: {
           id: string;
-          owner_id: string;
+          owner_id: string | null;
+          profile_role: string;
           name: string;
           city: string;
           industry: string;
@@ -24,7 +25,8 @@ export type Database = {
         };
         Insert: {
           id?: string;
-          owner_id?: string;
+          owner_id?: string | null;
+          profile_role?: string;
           name: string;
           city: string;
           industry: string;
@@ -42,7 +44,8 @@ export type Database = {
         };
         Update: {
           id?: string;
-          owner_id?: string;
+          owner_id?: string | null;
+          profile_role?: string;
           name?: string;
           city?: string;
           industry?: string;
@@ -63,7 +66,7 @@ export type Database = {
       early_user_events: {
         Row: {
           id: string;
-          owner_id: string;
+          owner_id: string | null;
           early_user_id: string;
           type: string;
           title: string;
@@ -72,7 +75,7 @@ export type Database = {
         };
         Insert: {
           id?: string;
-          owner_id?: string;
+          owner_id?: string | null;
           early_user_id: string;
           type?: string;
           title: string;
@@ -81,7 +84,7 @@ export type Database = {
         };
         Update: {
           id?: string;
-          owner_id?: string;
+          owner_id?: string | null;
           early_user_id?: string;
           type?: string;
           title?: string;
@@ -93,7 +96,8 @@ export type Database = {
       marketing_questions: {
         Row: {
           id: string;
-          owner_id: string;
+          owner_id: string | null;
+          target_role: string;
           text: string;
           category: string;
           type: string;
@@ -106,7 +110,8 @@ export type Database = {
         };
         Insert: {
           id?: string;
-          owner_id?: string;
+          owner_id?: string | null;
+          target_role?: string;
           text: string;
           category?: string;
           type?: string;
@@ -119,7 +124,8 @@ export type Database = {
         };
         Update: {
           id?: string;
-          owner_id?: string;
+          owner_id?: string | null;
+          target_role?: string;
           text?: string;
           category?: string;
           type?: string;
@@ -135,7 +141,7 @@ export type Database = {
       user_question_answers: {
         Row: {
           id: string;
-          owner_id: string;
+          owner_id: string | null;
           early_user_id: string;
           question_id: string;
           answer_text: string | null;
@@ -144,7 +150,7 @@ export type Database = {
         };
         Insert: {
           id?: string;
-          owner_id?: string;
+          owner_id?: string | null;
           early_user_id: string;
           question_id: string;
           answer_text?: string | null;
@@ -153,7 +159,7 @@ export type Database = {
         };
         Update: {
           id?: string;
-          owner_id?: string;
+          owner_id?: string | null;
           early_user_id?: string;
           question_id?: string;
           answer_text?: string | null;

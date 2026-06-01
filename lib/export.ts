@@ -8,12 +8,13 @@ function escapeCsvValue(value: string | null | undefined): string {
 
 export function usersToCsv(users: EarlyUser[]): string {
   const headers = [
-    'Название / Имя', 'Город', 'Отрасль', 'Контакт', 'Условия', 'Этап', 'Следующий шаг',
+    'Название / Имя', 'Сегмент', 'Город', 'Отрасль', 'Контакт', 'Условия', 'Этап', 'Следующий шаг',
     'Дата следующего контакта', 'Приоритет', 'Источник', 'Комментарий', 'Создан', 'Обновлен',
   ];
 
   const rows = users.map((user) => [
     user.name,
+    user.profile_role === 'map' ? 'Пользователь карты' : 'Пользователь CRM',
     user.city,
     user.industry,
     user.contact,

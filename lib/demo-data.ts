@@ -17,6 +17,7 @@ const today = new Date();
 
 export const demoUsers: EarlyUserInput[] = [
   {
+    profile_role: 'crm',
     name: 'Barber Pro',
     city: 'Минск',
     industry: 'Барбершоп',
@@ -31,6 +32,7 @@ export const demoUsers: EarlyUserInput[] = [
     is_archived: false,
   },
   {
+    profile_role: 'crm',
     name: 'Beauty Line',
     city: 'Гомель',
     industry: 'Салон красоты',
@@ -45,6 +47,7 @@ export const demoUsers: EarlyUserInput[] = [
     is_archived: false,
   },
   {
+    profile_role: 'map',
     name: 'AutoClean',
     city: 'Брест',
     industry: 'Автомойка',
@@ -59,6 +62,7 @@ export const demoUsers: EarlyUserInput[] = [
     is_archived: false,
   },
   {
+    profile_role: 'crm',
     name: 'FitLab',
     city: 'Гродно',
     industry: 'Фитнес',
@@ -73,6 +77,7 @@ export const demoUsers: EarlyUserInput[] = [
     is_archived: false,
   },
   {
+    profile_role: 'map',
     name: 'Coffee Point',
     city: 'Витебск',
     industry: 'Кафе',
@@ -87,6 +92,7 @@ export const demoUsers: EarlyUserInput[] = [
     is_archived: false,
   },
   {
+    profile_role: 'crm',
     name: 'Style Hub',
     city: 'Минск',
     industry: 'Салон красоты',
@@ -101,6 +107,7 @@ export const demoUsers: EarlyUserInput[] = [
     is_archived: false,
   },
   {
+    profile_role: 'map',
     name: 'Detail Car',
     city: 'Могилёв',
     industry: 'Автосервис',
@@ -119,6 +126,7 @@ export const demoUsers: EarlyUserInput[] = [
 
 export const demoQuestions: MarketingQuestionInput[] = [
   {
+    target_role: 'all',
     text: 'Какую главную проблему сейчас должен решить сервис для вашего бизнеса?',
     category: 'Боль клиента',
     type: 'long_text',
@@ -128,6 +136,7 @@ export const demoQuestions: MarketingQuestionInput[] = [
     sort_order: 1,
   },
   {
+    target_role: 'all',
     text: 'Чем сейчас пользуетесь для записи клиентов и учета?',
     category: 'Текущий процесс',
     type: 'long_text',
@@ -137,6 +146,7 @@ export const demoQuestions: MarketingQuestionInput[] = [
     sort_order: 2,
   },
   {
+    target_role: 'crm',
     text: 'Сколько клиентов в среднем приходит в месяц?',
     category: 'Размер бизнеса',
     type: 'number',
@@ -146,6 +156,7 @@ export const demoQuestions: MarketingQuestionInput[] = [
     sort_order: 3,
   },
   {
+    target_role: 'all',
     text: 'Готовы ли вы протестировать сервис до официального запуска?',
     category: 'Готовность к пилоту',
     type: 'yes_no',
@@ -155,6 +166,7 @@ export const demoQuestions: MarketingQuestionInput[] = [
     sort_order: 4,
   },
   {
+    target_role: 'all',
     text: 'Какие условия для старта вам подходят?',
     category: 'Условия',
     type: 'single_choice',
@@ -164,6 +176,7 @@ export const demoQuestions: MarketingQuestionInput[] = [
     sort_order: 5,
   },
   {
+    target_role: 'crm',
     text: 'Какая функция была бы самой ценной в первый месяц?',
     category: 'Функции',
     type: 'long_text',
@@ -173,6 +186,7 @@ export const demoQuestions: MarketingQuestionInput[] = [
     sort_order: 6,
   },
   {
+    target_role: 'map',
     text: 'Что может помешать вам начать пользоваться сервисом?',
     category: 'Возражения',
     type: 'long_text',
@@ -182,6 +196,7 @@ export const demoQuestions: MarketingQuestionInput[] = [
     sort_order: 7,
   },
   {
+    target_role: 'map',
     text: 'Можно ли использовать ваш бизнес как публичный кейс после запуска?',
     category: 'Кейс / отзыв',
     type: 'yes_no',

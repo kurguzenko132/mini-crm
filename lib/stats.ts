@@ -20,6 +20,7 @@ export function filterUsers(users: EarlyUser[], filters: Filters): EarlyUser[] {
 
   return users.filter((user) => {
     if (filters.onlyToday && !isToday(user.next_contact_date)) return false;
+    if (filters.profileRole && user.profile_role !== filters.profileRole) return false;
     if (filters.city && user.city !== filters.city) return false;
     if (filters.industry && user.industry !== filters.industry) return false;
     if (filters.terms && user.terms !== filters.terms) return false;
@@ -37,6 +38,7 @@ export function filterUsers(users: EarlyUser[], filters: Filters): EarlyUser[] {
       user.next_step ?? '',
       user.notes ?? '',
       user.source ?? '',
+      user.profile_role,
     ].join(' ').toLowerCase();
     return haystack.includes(search);
   });

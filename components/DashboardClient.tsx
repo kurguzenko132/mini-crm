@@ -13,8 +13,10 @@ import type {
   MarketingQuestion,
   MarketingQuestionInput,
   Priority,
+  QuestionTargetRole,
   QuestionType,
   Stage,
+  UserRole,
   UserAnswer,
 } from '@/lib/types';
 import { createClient } from '@/lib/supabase/browser';
@@ -50,6 +52,7 @@ const navigationItems: Array<{ mode: ViewMode; label: string }> = [
 ];
 
 const emptyInput: EarlyUserInput = {
+  profile_role: 'crm',
   name: '',
   city: 'Минск',
   industry: 'Барбершоп',
@@ -65,6 +68,7 @@ const emptyInput: EarlyUserInput = {
 };
 
 const emptyQuestionInput: MarketingQuestionInput = {
+  target_role: 'all',
   text: '',
   category: 'Общее',
   type: 'long_text',
@@ -88,9 +92,44 @@ const questionTypeLabel: Record<QuestionType, string> = {
   single_choice: 'Выбор варианта',
 };
 
+const userRoleLabel: Record<UserRole, string> = {
+  map: 'Пользователи карты',
+  crm: 'Пользователи CRM',
+};
+
+const questionRoleLabel: Record<QuestionTargetRole, string> = {
+  all: 'Для всех',
+  map: 'Для карты',
+  crm: 'Для CRM',
+};
+
+const roleTabs: Array<{ value: 'all' | UserRole; label: string }> = [
+  { value: 'all', label: 'Все' },
+  { value: 'map', label: 'Карта' },
+  { value: 'crm', label: 'CRM' },
+];
+
+function normalizeUserRole(value: string | null | undefined): UserRole {
+  return value === 'map' ? 'map' : 'crm';
+}
+
+function normalizeQuestionRole(value: string | null | undefined): QuestionTargetRole {
+  if (value === 'map' || value === 'crm') return value;
+  return 'all';
+}
+
+function sanitizeUser(user: EarlyUser): EarlyUser {
+  return { ...user, profile_role: normalizeUserRole((user as { profile_role?: string | null }).profile_role) };
+}
+
+function sanitizeQuestion(question: MarketingQuestion): MarketingQuestion {
+  return { ...question, target_role: normalizeQuestionRole((question as { target_role?: string | null }).target_role) };
+}
+
 function normalizeInput(input: EarlyUserInput) {
   return {
     ...input,
+    profile_role: normalizeUserRole(input.profile_role),
     name: input.name.trim(),
     city: input.city.trim(),
     industry: input.industry.trim(),
@@ -110,6 +149,7 @@ function normalizeQuestionInput(input: MarketingQuestionInput) {
     .filter(Boolean);
 
   return {
+    target_role: normalizeQuestionRole(input.target_role),
     text: input.text.trim(),
     category: input.category.trim() || 'Общее',
     type: input.type,
@@ -170,9 +210,9 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
   const supabase = useMemo(() => createClient(), []);
   const selectionRequestRef = useRef(0);
   const selectedUserIdRef = useRef<string | null>(null);
-  const [users, setUsers] = useState<EarlyUser[]>(initialUsers);
+  const [users, setUsers] = useState<EarlyUser[]>(() => initialUsers.map(sanitizeUser));
   const [events, setEvents] = useState<EarlyUserEvent[]>([]);
-  const [questions, setQuestions] = useState<MarketingQuestion[]>(initialQuestions);
+  const [questions, setQuestions] = useState<MarketingQuestion[]>(() => initialQuestions.map(sanitizeQuestion));
   const [answers, setAnswers] = useState<UserAnswer[]>(initialAnswers);
   const [answerDrafts, setAnswerDrafts] = useState<Record<string, string>>({});
   const [selected, setSelected] = useState<EarlyUser | null>(null);
@@ -185,8 +225,11 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState<string | null>(initialError);
   const [viewMode, setViewMode] = useState<ViewMode>('table');
+  const [userRoleTab, setUserRoleTab] = useState<'all' | UserRole>('all');
+  const [questionRoleTab, setQuestionRoleTab] = useState<'all' | UserRole>('all');
   const [filters, setFilters] = useState<Filters>({
     search: '',
+    profileRole: '',
     city: '',
     industry: '',
     terms: '',
@@ -195,29 +238,46 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
     onlyToday: false,
   });
 
-  const filteredUsers = useMemo(() => filterUsers(users, filters), [users, filters]);
-  const metrics = useMemo(() => dashboardMetrics(users), [users]);
-  const stages = useMemo(() => stageCounts(users), [users]);
-  const cityStats = useMemo(() => topCounts(users, 'city', 7), [users]);
-  const industryStats = useMemo(() => topCounts(users, 'industry', 7), [users]);
-  const termsStats = useMemo(() => topCounts(users, 'terms', 7), [users]);
+  const usersAfterFilters = useMemo(() => filterUsers(users, filters), [users, filters]);
+  const filteredUsers = useMemo(
+    () => (userRoleTab === 'all' ? usersAfterFilters : usersAfterFilters.filter((user) => user.profile_role === userRoleTab)),
+    [usersAfterFilters, userRoleTab],
+  );
+  const metrics = useMemo(() => dashboardMetrics(filteredUsers), [filteredUsers]);
+  const stages = useMemo(() => stageCounts(filteredUsers), [filteredUsers]);
+  const cityStats = useMemo(() => topCounts(filteredUsers, 'city', 7), [filteredUsers]);
+  const industryStats = useMemo(() => topCounts(filteredUsers, 'industry', 7), [filteredUsers]);
+  const termsStats = useMemo(() => topCounts(filteredUsers, 'terms', 7), [filteredUsers]);
   const activeQuestions = useMemo(
-    () => questions.filter((question) => question.is_active).sort((a, b) => a.sort_order - b.sort_order),
+    () => questions.filter((question) => question.is_active).sort((a, b) => a.sort_order - b.sort_order || a.created_at.localeCompare(b.created_at)),
     [questions],
   );
-  const activeQuestionIds = useMemo(() => new Set(activeQuestions.map((question) => question.id)), [activeQuestions]);
-  const questionCategories = useMemo(() => uniqueSorted(questions.map((question) => question.category)), [questions]);
+  const visibleQuestions = useMemo(() => {
+    const scoped = questionRoleTab === 'all'
+      ? questions
+      : questions.filter((question) => question.target_role === 'all' || question.target_role === questionRoleTab);
+    return [...scoped].sort((a, b) => a.sort_order - b.sort_order || a.created_at.localeCompare(b.created_at));
+  }, [questions, questionRoleTab]);
+  const visibleActiveQuestions = useMemo(() => visibleQuestions.filter((question) => question.is_active), [visibleQuestions]);
+  const selectedQuestions = useMemo(() => {
+    if (!selected) return visibleActiveQuestions;
+    return activeQuestions.filter((question) => question.target_role === 'all' || question.target_role === selected.profile_role);
+  }, [activeQuestions, selected, visibleActiveQuestions]);
+  const questionCategories = useMemo(() => uniqueSorted(visibleQuestions.map((question) => question.category)), [visibleQuestions]);
+  const activeQuestionIdsByRole = useMemo(() => ({
+    map: new Set(activeQuestions.filter((question) => question.target_role === 'all' || question.target_role === 'map').map((question) => question.id)),
+    crm: new Set(activeQuestions.filter((question) => question.target_role === 'all' || question.target_role === 'crm').map((question) => question.id)),
+  }), [activeQuestions]);
   const todayUsers = useMemo(
-    () => users
+    () => filteredUsers
       .filter((user) => !user.is_archived && !['Отказ', 'Архив'].includes(user.stage))
       .filter((user) => isToday(user.next_contact_date) || isOverdue(user.next_contact_date))
       .sort((a, b) => (a.next_contact_date ?? '').localeCompare(b.next_contact_date ?? '')),
-    [users],
+    [filteredUsers],
   );
   const answerStats = useMemo(() => {
     const byUserQuestion = new Map<string, string>();
     const byQuestion = new Map<string, number>();
-    const byUserActive = new Map<string, number>();
     let totalAnswered = 0;
 
     for (const answer of answers) {
@@ -228,13 +288,10 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
 
       totalAnswered += 1;
       byQuestion.set(answer.question_id, (byQuestion.get(answer.question_id) ?? 0) + 1);
-      if (activeQuestionIds.has(answer.question_id)) {
-        byUserActive.set(answer.early_user_id, (byUserActive.get(answer.early_user_id) ?? 0) + 1);
-      }
     }
 
-    return { byUserQuestion, byQuestion, byUserActive, totalAnswered };
-  }, [answers, activeQuestionIds]);
+    return { byUserQuestion, byQuestion, totalAnswered };
+  }, [answers]);
 
   const cityOptions = useMemo(() => uniqueSorted([...DEFAULT_CITIES, ...users.map((user) => user.city)]), [users]);
   const industryOptions = useMemo(() => uniqueSorted([...DEFAULT_INDUSTRIES, ...users.map((user) => user.industry)]), [users]);
@@ -248,16 +305,29 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
     return answerStats.byUserQuestion.get(`${userId}:${questionId}`) ?? '';
   }
 
-  function getAnswerCount(userId: string) {
-    return answerStats.byUserActive.get(userId) ?? 0;
+  function getAnswerCount(userId: string, role: UserRole) {
+    const roleQuestionIds = activeQuestionIdsByRole[role];
+    let filled = 0;
+    roleQuestionIds.forEach((questionId) => {
+      if (answerStats.byUserQuestion.get(`${userId}:${questionId}`)?.trim()) filled += 1;
+    });
+    return filled;
+  }
+
+  function getTotalQuestionsForRole(role: UserRole) {
+    return activeQuestionIdsByRole[role].size;
+  }
+
+  function getQuestionsForRole(role: UserRole) {
+    return activeQuestions.filter((question) => question.target_role === 'all' || question.target_role === role);
   }
 
   function getQuestionAnswerCount(questionId: string) {
     return answerStats.byQuestion.get(questionId) ?? 0;
   }
 
-  function buildAnswerDrafts(userId: string, sourceAnswers = answers) {
-    return activeQuestions.reduce<Record<string, string>>((acc, question) => {
+  function buildAnswerDrafts(userId: string, sourceAnswers = answers, sourceQuestions = selectedQuestions) {
+    return sourceQuestions.reduce<Record<string, string>>((acc, question) => {
       acc[question.id] = sourceAnswers.find((answer) => answer.early_user_id === userId && answer.question_id === question.id)?.answer_text ?? '';
       return acc;
     }, {});
@@ -278,7 +348,7 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
       setNotice(error.message);
       return;
     }
-    setUsers((data ?? []) as EarlyUser[]);
+    setUsers(((data ?? []) as EarlyUser[]).map(sanitizeUser));
   }
 
   async function refreshQuestionsAndAnswers() {
@@ -291,7 +361,7 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
       setNotice(questionsResult.error?.message ?? answersResult.error?.message ?? 'Не удалось обновить вопросы.');
       return;
     }
-    setQuestions((questionsResult.data ?? []) as MarketingQuestion[]);
+    setQuestions(((questionsResult.data ?? []) as MarketingQuestion[]).map(sanitizeQuestion));
     setAnswers((answersResult.data ?? []) as UserAnswer[]);
   }
 
@@ -354,6 +424,7 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
   function openEditModal(user: EarlyUser) {
     setEditing(user);
     setForm({
+      profile_role: normalizeUserRole(user.profile_role),
       name: user.name,
       city: user.city,
       industry: user.industry,
@@ -379,6 +450,7 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
   function openEditQuestionModal(question: MarketingQuestion) {
     setEditingQuestion(question);
     setQuestionForm({
+      target_role: normalizeQuestionRole(question.target_role),
       text: question.text,
       category: question.category,
       type: question.type,
@@ -395,7 +467,7 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
     selectionRequestRef.current = requestId;
     setSelectedUser(user);
     setEvents([]);
-    setAnswerDrafts(buildAnswerDrafts(user.id));
+    setAnswerDrafts(buildAnswerDrafts(user.id, answers, getQuestionsForRole(user.profile_role)));
     await loadEvents(user.id, requestId);
   }
 
@@ -421,9 +493,12 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
           .single();
 
         if (error) throw error;
-        const updated = data as EarlyUser;
+        const updated = sanitizeUser(data as EarlyUser);
         setUsers((current) => current.map((user) => (user.id === updated.id ? updated : user)));
-        setSelected((current) => (current?.id === updated.id ? updated : current));
+        if (selected?.id === updated.id) {
+          setSelectedUser(updated);
+          setAnswerDrafts(buildAnswerDrafts(updated.id, answers, getQuestionsForRole(updated.profile_role)));
+        }
         await addEvent(updated.id, oldStage !== updated.stage ? `Этап изменён: ${oldStage} → ${updated.stage}` : 'Карточка обновлена', oldStage !== updated.stage ? 'stage_changed' : 'updated');
         if (selected?.id === updated.id) await loadEvents(updated.id);
       } else {
@@ -434,10 +509,10 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
           .single();
 
         if (error) throw error;
-        const created = data as EarlyUser;
+        const created = sanitizeUser(data as EarlyUser);
         setUsers((current) => [created, ...current]);
         setSelectedUser(created);
-        setAnswerDrafts(buildAnswerDrafts(created.id));
+        setAnswerDrafts(buildAnswerDrafts(created.id, answers, getQuestionsForRole(created.profile_role)));
         await addEvent(created.id, 'Пользователь добавлен', 'created', payload.notes ?? undefined);
         await loadEvents(created.id);
       }
@@ -476,7 +551,7 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
           .single();
 
         if (error) throw error;
-        const updated = data as MarketingQuestion;
+        const updated = sanitizeQuestion(data as MarketingQuestion);
         setQuestions((current) => current.map((question) => (question.id === updated.id ? updated : question)));
       } else {
         const { data, error } = await supabase
@@ -486,7 +561,7 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
           .single();
 
         if (error) throw error;
-        const created = data as MarketingQuestion;
+        const created = sanitizeQuestion(data as MarketingQuestion);
         setQuestions((current) => [...current, created].sort((a, b) => a.sort_order - b.sort_order));
       }
       setQuestionModalOpen(false);
@@ -557,7 +632,7 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
       setNotice(error.message);
       return;
     }
-    const updated = data as MarketingQuestion;
+    const updated = sanitizeQuestion(data as MarketingQuestion);
     setQuestions((current) => current.map((item) => (item.id === updated.id ? updated : item)));
   }
 
@@ -574,7 +649,7 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
       setNotice(error.message);
       return;
     }
-    const updated = data as EarlyUser;
+    const updated = sanitizeUser(data as EarlyUser);
     setUsers((current) => current.map((item) => (item.id === user.id ? updated : item)));
     setSelected((current) => (current?.id === user.id ? updated : current));
     await addEvent(user.id, `Этап изменён: ${user.stage} → ${stage}`, 'stage_changed');
@@ -583,11 +658,11 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
 
   async function handleSaveAnswers() {
     if (!selected) return;
-    if (activeQuestions.length === 0) {
+    if (selectedQuestions.length === 0) {
       setNotice('Сначала добавь вопросы на странице «Вопросы».');
       return;
     }
-    const missingRequired = activeQuestions.filter((question) => question.is_required && !answerDrafts[question.id]?.trim());
+    const missingRequired = selectedQuestions.filter((question) => question.is_required && !answerDrafts[question.id]?.trim());
     if (missingRequired.length > 0) {
       const missingPreview = missingRequired.slice(0, 2).map((question) => `«${question.text}»`).join(', ');
       const suffix = missingRequired.length > 2 ? ` и ещё ${missingRequired.length - 2}` : '';
@@ -597,7 +672,7 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
 
     setLoading(true);
     try {
-      const rows = activeQuestions.map((question) => ({
+      const rows = selectedQuestions.map((question) => ({
         early_user_id: selected.id,
         question_id: question.id,
         answer_text: answerDrafts[question.id]?.trim() || null,
@@ -610,7 +685,10 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
 
       if (error) throw error;
       const saved = (data ?? []) as UserAnswer[];
-      setAnswers((current) => [...current.filter((answer) => answer.early_user_id !== selected.id), ...saved]);
+      setAnswers((current) => {
+        const savedKeys = new Set(saved.map((answer) => `${answer.early_user_id}:${answer.question_id}`));
+        return [...current.filter((answer) => !savedKeys.has(`${answer.early_user_id}:${answer.question_id}`)), ...saved];
+      });
       await addEvent(selected.id, 'Ответы на маркетинговые вопросы обновлены', 'updated');
       await loadEvents(selected.id);
       setNotice('Ответы сохранены.');
@@ -627,7 +705,7 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
     try {
       const { data, error } = await supabase.from('early_users').insert(demoUsers.map(normalizeInput)).select('*');
       if (error) throw error;
-      const created = (data ?? []) as EarlyUser[];
+      const created = ((data ?? []) as EarlyUser[]).map(sanitizeUser);
       setUsers((current) => [...created, ...current]);
       await Promise.all(created.map((user) => addEvent(user.id, 'Демо-пользователь добавлен', 'created')));
       setNotice('Демо-данные добавлены.');
@@ -648,7 +726,7 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
         .select('*');
 
       if (error) throw error;
-      const created = (data ?? []) as MarketingQuestion[];
+      const created = ((data ?? []) as MarketingQuestion[]).map(sanitizeQuestion);
       setQuestions((current) => [...current, ...created].sort((a, b) => a.sort_order - b.sort_order));
       setNotice('Базовые маркетинговые вопросы добавлены.');
     } catch (caught) {
@@ -667,14 +745,15 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
   }
 
   function exportAnswersCsv() {
-    const header = ['Пользователь', 'Город', 'Отрасль', 'Условия', 'Этап', ...activeQuestions.map((question) => question.text)];
+    const header = ['Пользователь', 'Сегмент', 'Город', 'Отрасль', 'Условия', 'Этап', ...visibleActiveQuestions.map((question) => question.text)];
     const rows = filteredUsers.map((user) => [
       user.name,
+      userRoleLabel[user.profile_role],
       user.city,
       user.industry,
       user.terms,
       user.stage,
-      ...activeQuestions.map((question) => getAnswer(user.id, question.id)),
+      ...visibleActiveQuestions.map((question) => getAnswer(user.id, question.id)),
     ]);
     const csv = [header, ...rows].map((row) => row.map(escapeCsv).join(';')).join('\n');
     downloadTextFile(`pilotbase-answers-${localDateStamp()}.csv`, csv, 'text/csv;charset=utf-8');
@@ -759,7 +838,7 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
           <MetricCard label="Бесплатно" value={metrics.free} icon="🎁" />
           <MetricCard label="Пониженный прайс" value={metrics.discounted} icon="🏷" />
           <MetricCard label="Подключены" value={metrics.connected} icon="✓" />
-          <MetricCard label="Вопросы / ответы" value={`${activeQuestions.length}/${answeredTotal}`} icon="❔" tone="warning" />
+          <MetricCard label="Вопросы / ответы" value={`${visibleActiveQuestions.length}/${answeredTotal}`} icon="❔" tone="warning" />
         </section>
 
         {viewMode !== 'questions' && (
@@ -785,11 +864,16 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
                 <option value="">Приоритет</option>
                 {PRIORITIES.map((priority) => <option key={priority.value} value={priority.value}>{priority.label}</option>)}
               </select>
+              <select value={filters.profileRole} onChange={(event) => updateFilter('profileRole', event.target.value as Filters['profileRole'])}>
+                <option value="">Сегмент</option>
+                <option value="map">Пользователи карты</option>
+                <option value="crm">Пользователи CRM</option>
+              </select>
               <label className="checkbox-filter">
                 <input checked={filters.onlyToday} onChange={(event) => updateFilter('onlyToday', event.target.checked)} type="checkbox" />
                 Только сегодня
               </label>
-              <button className="secondary-button" type="button" onClick={() => setFilters({ search: '', city: '', industry: '', terms: '', stage: '', priority: '', onlyToday: false })}>Сбросить</button>
+              <button className="secondary-button" type="button" onClick={() => setFilters({ search: '', profileRole: '', city: '', industry: '', terms: '', stage: '', priority: '', onlyToday: false })}>Сбросить</button>
             </section>
 
             <section className="quick-panel">
@@ -834,9 +918,21 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
             <div className="card-heading">
               <div>
                 <h2>Список пользователей</h2>
-                <p>Найдено: {filteredUsers.length} из {users.length}</p>
+                <p>Найдено: {filteredUsers.length} из {usersAfterFilters.length}</p>
               </div>
               <button className="secondary-button" onClick={refreshUsers} type="button">Обновить</button>
+            </div>
+            <div className="role-tabs">
+              {roleTabs.map((tab) => (
+                <button
+                  key={tab.value}
+                  className={userRoleTab === tab.value ? 'active' : ''}
+                  onClick={() => setUserRoleTab(tab.value)}
+                  type="button"
+                >
+                  {tab.label}
+                </button>
+              ))}
             </div>
             {filteredUsers.length === 0 ? (
               <EmptyState onCreate={openCreateModal} onDemo={handleLoadDemo} />
@@ -848,6 +944,7 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
                       <th>Название / Имя</th>
                       <th>Город</th>
                       <th>Отрасль</th>
+                      <th>Сегмент</th>
                       <th>Условия</th>
                       <th>Этап</th>
                       <th>Анкета</th>
@@ -860,15 +957,17 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
                   </thead>
                   <tbody>
                     {filteredUsers.map((user) => {
-                      const answerCount = getAnswerCount(user.id);
+                      const answerCount = getAnswerCount(user.id, user.profile_role);
+                      const totalForUserRole = getTotalQuestionsForRole(user.profile_role);
                       return (
                         <tr key={user.id} onClick={() => selectUser(user)} className={selected?.id === user.id ? 'selected-row' : ''}>
                           <td><strong>{user.name}</strong><small>{user.source || 'Источник не указан'}</small></td>
                           <td>{user.city}</td>
                           <td>{user.industry}</td>
+                          <td><span className={`tag ${user.profile_role === 'map' ? 'blue' : 'purple'}`}>{userRoleLabel[user.profile_role]}</span></td>
                           <td><span className={`tag ${classForTerms(user.terms)}`}>{user.terms}</span></td>
                           <td><span className={`tag ${classForStage(user.stage)}`}>{user.stage}</span></td>
-                          <td><span className={answerCount === activeQuestions.length && activeQuestions.length > 0 ? 'answer-progress done' : 'answer-progress'}>{answerCount}/{activeQuestions.length}</span></td>
+                          <td><span className={answerCount === totalForUserRole && totalForUserRole > 0 ? 'answer-progress done' : 'answer-progress'}>{answerCount}/{totalForUserRole}</span></td>
                           <td>{user.next_step || '—'}</td>
                           <td><span className={isOverdue(user.next_contact_date) ? 'date-bad' : isToday(user.next_contact_date) ? 'date-good' : ''}>{formatDate(user.next_contact_date)}</span></td>
                           <td><span className={`priority ${user.priority}`}>{priorityLabel[user.priority]}</span></td>
@@ -894,7 +993,7 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
             <div className="card-heading">
               <div>
                 <h2>Вопросы для интервью</h2>
-                <p>Создай список вопросов один раз, а ответы заполняй в карточке каждого пользователя.</p>
+                <p>Разделяй вопросы по ролям: для карты, для CRM или общие для всех.</p>
               </div>
               <div className="inline-actions">
                 <button className="secondary-button" onClick={refreshQuestionsAndAnswers} type="button">Обновить</button>
@@ -903,18 +1002,31 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
               </div>
             </div>
 
+            <div className="role-tabs">
+              {roleTabs.map((tab) => (
+                <button
+                  key={tab.value}
+                  className={questionRoleTab === tab.value ? 'active' : ''}
+                  onClick={() => setQuestionRoleTab(tab.value)}
+                  type="button"
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
             <div className="question-stats">
-              <MetricMini label="Всего вопросов" value={questions.length} />
-              <MetricMini label="Активные" value={activeQuestions.length} />
-              <MetricMini label="Обязательные" value={questions.filter((question) => question.is_required).length} />
+              <MetricMini label="Всего вопросов" value={visibleQuestions.length} />
+              <MetricMini label="Активные" value={visibleActiveQuestions.length} />
+              <MetricMini label="Обязательные" value={visibleQuestions.filter((question) => question.is_required).length} />
               <MetricMini label="Всего ответов" value={answeredTotal} />
             </div>
 
-            {questions.length === 0 ? (
+            {visibleQuestions.length === 0 ? (
               <div className="empty-state">
                 <div className="empty-icon">?</div>
                 <h3>Вопросов пока нет</h3>
-                <p>Добавь свои вопросы или загрузи базовый набор для маркетинговых интервью.</p>
+                <p>Добавь вопросы для выбранного сегмента или загрузи базовый набор.</p>
                 <div>
                   <button className="primary-button" onClick={openCreateQuestionModal} type="button">Добавить вопрос</button>
                   <button className="secondary-button" onClick={handleLoadDemoQuestions} type="button">Загрузить базовые</button>
@@ -928,6 +1040,7 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
                       <th>Порядок</th>
                       <th>Вопрос</th>
                       <th>Категория</th>
+                      <th>Сегмент</th>
                       <th>Тип</th>
                       <th>Обяз.</th>
                       <th>Статус</th>
@@ -936,11 +1049,12 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
                     </tr>
                   </thead>
                   <tbody>
-                    {questions.map((question) => (
+                    {visibleQuestions.map((question) => (
                       <tr key={question.id}>
                         <td>{question.sort_order}</td>
                         <td><strong>{question.text}</strong>{question.options.length > 0 && <small>{question.options.join(' · ')}</small>}</td>
                         <td>{question.category}</td>
+                        <td><span className={`tag ${question.target_role === 'all' ? 'gray' : question.target_role === 'map' ? 'blue' : 'purple'}`}>{questionRoleLabel[question.target_role]}</span></td>
                         <td>{questionTypeLabel[question.type]}</td>
                         <td>{question.is_required ? 'Да' : 'Нет'}</td>
                         <td><span className={`tag ${question.is_active ? 'green' : 'gray'}`}>{question.is_active ? 'Активен' : 'Скрыт'}</span></td>
@@ -984,7 +1098,7 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
                         <span>{user.city} · {user.industry}</span>
                         <small>{user.terms}</small>
                         {user.next_step && <em>{user.next_step}</em>}
-                        <b>Анкета: {getAnswerCount(user.id)}/{activeQuestions.length}</b>
+                        <b>Анкета: {getAnswerCount(user.id, user.profile_role)}/{getTotalQuestionsForRole(user.profile_role)}</b>
                       </article>
                     ))}
                   </div>
@@ -1000,7 +1114,7 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
             <StatsPanel title="По городам" data={cityStats} max={maxCity} />
             <StatsPanel title="По отраслям" data={industryStats} max={maxIndustry} />
             <StatsPanel title="По условиям" data={termsStats} max={maxTerms} />
-            <QuestionAnalytics users={users} questions={activeQuestions} answers={answers} />
+            <QuestionAnalytics users={filteredUsers} questions={visibleActiveQuestions} answers={answers} />
           </section>
         )}
 
@@ -1029,7 +1143,8 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
             <div><dt>Дата контакта</dt><dd>{formatDate(selected.next_contact_date)}</dd></div>
             <div><dt>Приоритет</dt><dd>{priorityLabel[selected.priority]}</dd></div>
             <div><dt>Источник</dt><dd>{selected.source || '—'}</dd></div>
-            <div><dt>Анкета</dt><dd>{getAnswerCount(selected.id)}/{activeQuestions.length}</dd></div>
+            <div><dt>Сегмент</dt><dd>{userRoleLabel[selected.profile_role]}</dd></div>
+            <div><dt>Анкета</dt><dd>{getAnswerCount(selected.id, selected.profile_role)}/{getTotalQuestionsForRole(selected.profile_role)}</dd></div>
           </dl>
 
           <div className="details-actions">
@@ -1039,14 +1154,14 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
 
           <section className="mini-section">
             <h3>Ответы на вопросы</h3>
-            {activeQuestions.length === 0 ? (
+            {selectedQuestions.length === 0 ? (
               <div className="answers-empty">
                 <p>Вопросов пока нет. Открой страницу «Вопросы» и добавь список для интервью.</p>
                 <button className="secondary-button" type="button" onClick={() => { setViewMode('questions'); setSelectedUser(null); }}>Открыть вопросы</button>
               </div>
             ) : (
               <div className="answers-form">
-                {activeQuestions.map((question) => (
+                {selectedQuestions.map((question) => (
                   <QuestionAnswerField
                     key={question.id}
                     question={question}
@@ -1103,6 +1218,10 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
               <label>Название / имя<input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required /></label>
               <label>Город<input list="city-list" value={form.city} onChange={(event) => setForm({ ...form, city: event.target.value })} required /></label>
               <label>Отрасль<input list="industry-list" value={form.industry} onChange={(event) => setForm({ ...form, industry: event.target.value })} required /></label>
+              <label>Сегмент<select value={form.profile_role} onChange={(event) => setForm({ ...form, profile_role: event.target.value as UserRole })}>
+                <option value="map">Пользователи карты</option>
+                <option value="crm">Пользователи CRM</option>
+              </select></label>
               <label>Контакт<input value={form.contact} onChange={(event) => setForm({ ...form, contact: event.target.value })} placeholder="@telegram / телефон / email" /></label>
               <label>Условия<input list="terms-list" value={form.terms} onChange={(event) => setForm({ ...form, terms: event.target.value })} required /></label>
               <label>Этап<select value={form.stage} onChange={(event) => setForm({ ...form, stage: event.target.value as Stage })}>{STAGES.map((stage) => <option key={stage} value={stage}>{stage}</option>)}</select></label>
@@ -1139,6 +1258,11 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
             <div className="form-grid">
               <label className="wide-field">Текст вопроса<textarea value={questionForm.text} onChange={(event) => setQuestionForm({ ...questionForm, text: event.target.value })} rows={3} required /></label>
               <label>Категория<input value={questionForm.category} onChange={(event) => setQuestionForm({ ...questionForm, category: event.target.value })} placeholder="Боль клиента / Условия / Возражения" /></label>
+              <label>Сегмент<select value={questionForm.target_role} onChange={(event) => setQuestionForm({ ...questionForm, target_role: event.target.value as QuestionTargetRole })}>
+                <option value="all">Для всех</option>
+                <option value="map">Только карта</option>
+                <option value="crm">Только CRM</option>
+              </select></label>
               <label>Тип ответа<select value={questionForm.type} onChange={(event) => setQuestionForm({ ...questionForm, type: event.target.value as QuestionType })}>
                 <option value="short_text">Короткий ответ</option>
                 <option value="long_text">Развёрнутый ответ</option>

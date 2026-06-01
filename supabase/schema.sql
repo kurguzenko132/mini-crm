@@ -6,6 +6,7 @@ create extension if not exists pgcrypto;
 create table if not exists public.early_users (
   id uuid primary key default gen_random_uuid(),
   owner_id uuid default auth.uid() references auth.users(id) on delete cascade,
+  profile_role text not null default 'crm' check (profile_role in ('map', 'crm')),
   name text not null check (length(trim(name)) > 0),
   city text not null check (length(trim(city)) > 0),
   industry text not null check (length(trim(industry)) > 0),
@@ -38,6 +39,7 @@ create table if not exists public.early_user_events (
 create table if not exists public.marketing_questions (
   id uuid primary key default gen_random_uuid(),
   owner_id uuid default auth.uid() references auth.users(id) on delete cascade,
+  target_role text not null default 'all' check (target_role in ('all', 'map', 'crm')),
   text text not null check (length(trim(text)) > 0),
   category text not null default 'Общее',
   type text not null default 'long_text' check (type in ('short_text', 'long_text', 'number', 'yes_no', 'single_choice')),
@@ -61,6 +63,7 @@ create table if not exists public.user_question_answers (
 );
 
 create index if not exists early_users_owner_id_idx on public.early_users(owner_id);
+create index if not exists early_users_profile_role_idx on public.early_users(profile_role);
 create index if not exists early_users_stage_idx on public.early_users(stage);
 create index if not exists early_users_city_idx on public.early_users(city);
 create index if not exists early_users_industry_idx on public.early_users(industry);
@@ -68,6 +71,7 @@ create index if not exists early_users_next_contact_idx on public.early_users(ne
 create index if not exists early_user_events_owner_id_idx on public.early_user_events(owner_id);
 create index if not exists early_user_events_user_id_idx on public.early_user_events(early_user_id);
 create index if not exists marketing_questions_owner_id_idx on public.marketing_questions(owner_id);
+create index if not exists marketing_questions_target_role_idx on public.marketing_questions(target_role);
 create index if not exists marketing_questions_active_idx on public.marketing_questions(is_active);
 create index if not exists user_question_answers_owner_id_idx on public.user_question_answers(owner_id);
 create index if not exists user_question_answers_user_id_idx on public.user_question_answers(early_user_id);

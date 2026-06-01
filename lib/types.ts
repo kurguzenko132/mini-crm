@@ -4,10 +4,13 @@ export type Stage = (typeof STAGES)[number];
 export type Priority = 'low' | 'medium' | 'high';
 export type EventType = 'created' | 'updated' | 'stage_changed' | 'note' | 'contact' | 'deleted';
 export type QuestionType = 'short_text' | 'long_text' | 'number' | 'yes_no' | 'single_choice';
+export type UserRole = 'map' | 'crm';
+export type QuestionTargetRole = 'all' | UserRole;
 
 export type EarlyUser = {
   id: string;
-  owner_id?: string;
+  owner_id?: string | null;
+  profile_role: UserRole;
   name: string;
   city: string;
   industry: string;
@@ -25,6 +28,7 @@ export type EarlyUser = {
 };
 
 export type EarlyUserInput = {
+  profile_role: UserRole;
   name: string;
   city: string;
   industry: string;
@@ -41,7 +45,7 @@ export type EarlyUserInput = {
 
 export type EarlyUserEvent = {
   id: string;
-  owner_id?: string;
+  owner_id?: string | null;
   early_user_id: string;
   type: EventType;
   title: string;
@@ -51,7 +55,8 @@ export type EarlyUserEvent = {
 
 export type MarketingQuestion = {
   id: string;
-  owner_id?: string;
+  owner_id?: string | null;
+  target_role: QuestionTargetRole;
   text: string;
   category: string;
   type: QuestionType;
@@ -64,6 +69,7 @@ export type MarketingQuestion = {
 };
 
 export type MarketingQuestionInput = {
+  target_role: QuestionTargetRole;
   text: string;
   category: string;
   type: QuestionType;
@@ -75,7 +81,7 @@ export type MarketingQuestionInput = {
 
 export type UserAnswer = {
   id: string;
-  owner_id?: string;
+  owner_id?: string | null;
   early_user_id: string;
   question_id: string;
   answer_text: string | null;
@@ -85,6 +91,7 @@ export type UserAnswer = {
 
 export type Filters = {
   search: string;
+  profileRole: '' | UserRole;
   city: string;
   industry: string;
   terms: string;

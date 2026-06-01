@@ -6,6 +6,7 @@ create extension if not exists pgcrypto;
 create table if not exists public.marketing_questions (
   id uuid primary key default gen_random_uuid(),
   owner_id uuid default auth.uid() references auth.users(id) on delete cascade,
+  target_role text not null default 'all' check (target_role in ('all', 'map', 'crm')),
   text text not null check (length(trim(text)) > 0),
   category text not null default 'Общее',
   type text not null default 'long_text' check (type in ('short_text', 'long_text', 'number', 'yes_no', 'single_choice')),
@@ -29,6 +30,7 @@ create table if not exists public.user_question_answers (
 );
 
 create index if not exists marketing_questions_owner_id_idx on public.marketing_questions(owner_id);
+create index if not exists marketing_questions_target_role_idx on public.marketing_questions(target_role);
 create index if not exists marketing_questions_active_idx on public.marketing_questions(is_active);
 create index if not exists user_question_answers_owner_id_idx on public.user_question_answers(owner_id);
 create index if not exists user_question_answers_user_id_idx on public.user_question_answers(early_user_id);
@@ -55,6 +57,21 @@ before update on public.user_question_answers
 for each row execute function public.set_updated_at();
 
 -- Public workspace mode: everyone (anon + authenticated) works in one common base.
+alter table if exists public.early_users add column if not exists profile_role text;
+alter table if exists public.early_users alter column profile_role set default 'crm';
+update public.early_users set profile_role = coalesce(nullif(trim(profile_role), ''), 'crm');
+alter table if exists public.early_users alter column profile_role set not null;
+alter table if exists public.early_users drop constraint if exists early_users_profile_role_check;
+alter table if exists public.early_users add constraint early_users_profile_role_check check (profile_role in ('map', 'crm'));
+create index if not exists early_users_profile_role_idx on public.early_users(profile_role);
+
+alter table if exists public.marketing_questions add column if not exists target_role text;
+alter table if exists public.marketing_questions alter column target_role set default 'all';
+update public.marketing_questions set target_role = coalesce(nullif(trim(target_role), ''), 'all');
+alter table if exists public.marketing_questions alter column target_role set not null;
+alter table if exists public.marketing_questions drop constraint if exists marketing_questions_target_role_check;
+alter table if exists public.marketing_questions add constraint marketing_questions_target_role_check check (target_role in ('all', 'map', 'crm'));
+
 alter table if exists public.early_users alter column owner_id drop not null;
 alter table if exists public.early_user_events alter column owner_id drop not null;
 alter table if exists public.marketing_questions alter column owner_id drop not null;

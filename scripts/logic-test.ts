@@ -28,6 +28,7 @@ assert.equal(metrics.connected, 1, 'connected metric should count connected user
 
 const filteredByCity = filterUsers(users, {
   search: '',
+  profileRole: '',
   city: 'Минск',
   industry: '',
   terms: '',
@@ -39,6 +40,7 @@ assert.equal(filteredByCity.length, 2, 'city filter should work');
 
 const searchResult = filterUsers(users, {
   search: 'beauty',
+  profileRole: '',
   city: '',
   industry: '',
   terms: '',
