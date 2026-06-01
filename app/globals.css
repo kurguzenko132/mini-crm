@@ -746,6 +746,66 @@ textarea:focus {
   flex-wrap: wrap;
 }
 
+.saved-views-bar {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  background: linear-gradient(160deg, rgba(16, 26, 43, 0.92), rgba(11, 19, 33, 0.92));
+  border: 1px solid rgba(71, 107, 160, 0.4);
+  border-radius: 16px;
+}
+
+.saved-views-create {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.saved-views-create input {
+  max-width: 420px;
+}
+
+.saved-views-list {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.saved-view-item {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(103, 166, 255, 0.34);
+  background: rgba(12, 20, 35, 0.9);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.saved-view-apply,
+.saved-view-remove {
+  border: 0;
+  background: transparent;
+  color: var(--text-soft);
+  font-weight: 700;
+  padding: 7px 11px;
+}
+
+.saved-view-apply:hover {
+  color: var(--text);
+  background: rgba(103, 166, 255, 0.16);
+}
+
+.saved-view-remove {
+  border-left: 1px solid rgba(103, 166, 255, 0.28);
+  font-size: 16px;
+  line-height: 1;
+}
+
+.saved-view-remove:hover {
+  color: #ffc1cc;
+  background: rgba(255, 123, 143, 0.14);
+}
+
 .content-card {
   padding: 20px;
   min-width: 0;
@@ -819,6 +879,24 @@ textarea:focus {
   margin: 0;
 }
 
+.bulk-actions-bar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 0 20px 14px;
+  flex-wrap: wrap;
+}
+
+.bulk-actions-bar > span {
+  color: var(--text-soft);
+  font-weight: 700;
+  margin-right: 2px;
+}
+
+.bulk-actions-bar select {
+  min-width: 200px;
+}
+
 .questions-page .card-heading {
   margin-bottom: 12px;
 }
@@ -856,6 +934,13 @@ th {
 
 td {
   font-size: 14px;
+}
+
+.users-table .select-col {
+  width: 42px;
+  text-align: center;
+  padding-left: 10px;
+  padding-right: 10px;
 }
 
 tbody tr {
@@ -1679,6 +1764,23 @@ td small {
 
   .export-actions .secondary-button {
     flex: 1;
+  }
+
+  .saved-views-create {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .saved-views-create input {
+    max-width: none;
+  }
+
+  .bulk-actions-bar {
+    padding: 0 14px 14px;
+  }
+
+  .bulk-actions-bar select {
+    min-width: 100%;
   }
 
   .details-panel {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { CONDITIONS, DEFAULT_CITIES, DEFAULT_INDUSTRIES, PRIORITIES, STAGES } from '@/lib/constants';
 import { demoQuestions, demoUsers } from '@/lib/demo-data';
 import { downloadTextFile, usersToCsv } from '@/lib/export';
@@ -29,6 +29,13 @@ type Props = {
 };
 
 type ViewMode = 'table' | 'stages' | 'analytics' | 'questions';
+type SavedView = {
+  id: string;
+  name: string;
+  filters: Filters;
+  userRoleTab: 'all' | UserRole;
+  questionRoleTab: 'all' | UserRole;
+};
 
 const viewModeLabel: Record<ViewMode, string> = {
   table: 'Пользователи',
@@ -108,6 +115,8 @@ const roleTabs: Array<{ value: 'all' | UserRole; label: string }> = [
   { value: 'map', label: 'Карта' },
   { value: 'crm', label: 'CRM' },
 ];
+
+const savedViewsStorageKey = 'pilotbase_saved_views_v1';
 
 function normalizeUserRole(value: string | null | undefined): UserRole {
   return value === 'map' ? 'map' : 'crm';
@@ -233,6 +242,10 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
   const [viewMode, setViewMode] = useState<ViewMode>('table');
   const [userRoleTab, setUserRoleTab] = useState<'all' | UserRole>('all');
   const [questionRoleTab, setQuestionRoleTab] = useState<'all' | UserRole>('all');
+  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+  const [bulkStage, setBulkStage] = useState<Stage>(STAGES[0]);
+  const [savedViews, setSavedViews] = useState<SavedView[]>([]);
+  const [savedViewName, setSavedViewName] = useState('');
   const [filters, setFilters] = useState<Filters>({
     search: '',
     profileRole: '',
@@ -305,9 +318,77 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
   const cityOptions = useMemo(() => uniqueSorted([...DEFAULT_CITIES, ...users.map((user) => user.city)]), [users]);
   const industryOptions = useMemo(() => uniqueSorted([...DEFAULT_INDUSTRIES, ...users.map((user) => user.industry)]), [users]);
   const termsOptions = useMemo(() => uniqueSorted([...CONDITIONS, ...users.map((user) => user.terms)]), [users]);
+  const selectedUserSet = useMemo(() => new Set(selectedUserIds), [selectedUserIds]);
+  const allFilteredSelected = filteredUsers.length > 0 && filteredUsers.every((user) => selectedUserSet.has(user.id));
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(savedViewsStorageKey);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as SavedView[];
+      if (Array.isArray(parsed)) setSavedViews(parsed);
+    } catch {
+      // ignore invalid local data
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(savedViewsStorageKey, JSON.stringify(savedViews));
+  }, [savedViews]);
+
+  useEffect(() => {
+    setSelectedUserIds((current) => current.filter((id) => filteredUsers.some((user) => user.id === id)));
+  }, [filteredUsers]);
 
   function updateFilter<K extends keyof Filters>(key: K, value: Filters[K]) {
     setFilters((current) => ({ ...current, [key]: value }));
+  }
+
+  function saveCurrentView() {
+    const name = savedViewName.trim();
+    if (!name) {
+      setNotice('Укажи название для сохранённого фильтра.');
+      return;
+    }
+
+    const view: SavedView = {
+      id: `${Date.now()}`,
+      name,
+      filters,
+      userRoleTab,
+      questionRoleTab,
+    };
+    setSavedViews((current) => [view, ...current].slice(0, 12));
+    setSavedViewName('');
+    setNotice(`Фильтр «${name}» сохранён.`);
+  }
+
+  function applySavedView(view: SavedView) {
+    setFilters(view.filters);
+    setUserRoleTab(view.userRoleTab);
+    setQuestionRoleTab(view.questionRoleTab);
+    setNotice(`Применён фильтр: ${view.name}`);
+  }
+
+  function removeSavedView(id: string) {
+    setSavedViews((current) => current.filter((item) => item.id !== id));
+  }
+
+  function toggleUserSelection(userId: string) {
+    setSelectedUserIds((current) => (current.includes(userId) ? current.filter((id) => id !== userId) : [...current, userId]));
+  }
+
+  function toggleSelectAllFiltered() {
+    if (allFilteredSelected) {
+      setSelectedUserIds((current) => current.filter((id) => !filteredUsers.some((user) => user.id === id)));
+      return;
+    }
+
+    setSelectedUserIds((current) => {
+      const next = new Set(current);
+      filteredUsers.forEach((user) => next.add(user.id));
+      return Array.from(next);
+    });
   }
 
   function getAnswer(userId: string, questionId: string) {
@@ -598,6 +679,85 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
       if (editing?.id === user.id) setEditing(null);
     } catch (caught) {
       setNotice(caught instanceof Error ? caught.message : 'Не удалось удалить пользователя.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function bulkChangeStage(stage: Stage) {
+    if (selectedUserIds.length === 0) return;
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('early_users')
+        .update({ stage })
+        .in('id', selectedUserIds)
+        .select('*');
+      if (error) throw error;
+
+      const updatedRows = ((data ?? []) as EarlyUser[]).map(sanitizeUser);
+      const byId = new Map(updatedRows.map((item) => [item.id, item]));
+      setUsers((current) => current.map((item) => byId.get(item.id) ?? item));
+      if (selected && byId.has(selected.id)) setSelected(byId.get(selected.id) ?? selected);
+      setNotice(`Этап обновлён у ${updatedRows.length} пользователей.`);
+    } catch (caught) {
+      setNotice(caught instanceof Error ? caught.message : 'Не удалось массово обновить этап.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function bulkShiftContact(days: number) {
+    if (selectedUserIds.length === 0) return;
+    const selectedRows = users.filter((user) => selectedUserSet.has(user.id));
+    if (selectedRows.length === 0) return;
+
+    setLoading(true);
+    try {
+      const results = await Promise.all(
+        selectedRows.map((user) => supabase
+          .from('early_users')
+          .update({ next_contact_date: addDaysStamp(user.next_contact_date, days) })
+          .eq('id', user.id)
+          .select('*')
+          .single()),
+      );
+
+      const error = results.find((result) => result.error)?.error;
+      if (error) throw error;
+
+      const updatedRows = results
+        .map((result) => result.data)
+        .filter(Boolean)
+        .map((row) => sanitizeUser(row as EarlyUser));
+      const byId = new Map(updatedRows.map((item) => [item.id, item]));
+      setUsers((current) => current.map((item) => byId.get(item.id) ?? item));
+      if (selected && byId.has(selected.id)) setSelected(byId.get(selected.id) ?? selected);
+      setNotice(`Дата контакта сдвинута на ${days} дн. для ${updatedRows.length} пользователей.`);
+    } catch (caught) {
+      setNotice(caught instanceof Error ? caught.message : 'Не удалось массово обновить даты.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function bulkDeleteUsers() {
+    if (selectedUserIds.length === 0) return;
+    const ok = confirm(`Удалить ${selectedUserIds.length} пользователей? Действие необратимо.`);
+    if (!ok) return;
+
+    setLoading(true);
+    try {
+      const { error } = await supabase.from('early_users').delete().in('id', selectedUserIds);
+      if (error) throw error;
+
+      setUsers((current) => current.filter((user) => !selectedUserSet.has(user.id)));
+      setAnswers((current) => current.filter((answer) => !selectedUserSet.has(answer.early_user_id)));
+      if (selected && selectedUserSet.has(selected.id)) setSelectedUser(null);
+      setSelectedUserIds([]);
+      setNotice('Выбранные пользователи удалены.');
+    } catch (caught) {
+      setNotice(caught instanceof Error ? caught.message : 'Не удалось массово удалить пользователей.');
     } finally {
       setLoading(false);
     }
@@ -1007,6 +1167,29 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
           </div>
         </div>
 
+        <section className="saved-views-bar">
+          <div className="saved-views-create">
+            <input
+              value={savedViewName}
+              onChange={(event) => setSavedViewName(event.target.value)}
+              placeholder="Название фильтра (например: Карта / Срочные)"
+            />
+            <button className="secondary-button" onClick={saveCurrentView} type="button">Сохранить фильтр</button>
+          </div>
+          <div className="saved-views-list">
+            {savedViews.length === 0 ? (
+              <span className="muted">Сохранённых фильтров пока нет.</span>
+            ) : (
+              savedViews.map((view) => (
+                <div className="saved-view-item" key={view.id}>
+                  <button className="saved-view-apply" onClick={() => applySavedView(view)} type="button">{view.name}</button>
+                  <button className="saved-view-remove" onClick={() => removeSavedView(view.id)} type="button" title="Удалить фильтр">×</button>
+                </div>
+              ))
+            )}
+          </div>
+        </section>
+
         {viewMode === 'table' && (
           <section className="content-card table-card">
             <div className="card-heading">
@@ -1028,13 +1211,26 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
                 </button>
               ))}
             </div>
+            <div className="bulk-actions-bar">
+              <span>Выбрано: {selectedUserIds.length}</span>
+              <select value={bulkStage} onChange={(event) => setBulkStage(event.target.value as Stage)}>
+                {STAGES.map((stage) => <option key={stage} value={stage}>{stage}</option>)}
+              </select>
+              <button className="secondary-button" disabled={loading || selectedUserIds.length === 0} onClick={() => bulkChangeStage(bulkStage)} type="button">Сменить этап</button>
+              <button className="secondary-button" disabled={loading || selectedUserIds.length === 0} onClick={() => bulkShiftContact(3)} type="button">+3 дня</button>
+              <button className="secondary-button" disabled={loading || selectedUserIds.length === 0} onClick={() => bulkShiftContact(7)} type="button">+7 дней</button>
+              <button className="secondary-button" disabled={loading || selectedUserIds.length === 0} onClick={bulkDeleteUsers} type="button">Удалить выбранных</button>
+            </div>
             {filteredUsers.length === 0 ? (
               <EmptyState onCreate={openCreateModal} onDemo={handleLoadDemo} />
             ) : (
               <div className="table-wrap">
-                <table>
+                <table className="users-table">
                   <thead>
                     <tr>
+                      <th className="select-col">
+                        <input checked={allFilteredSelected} onChange={toggleSelectAllFiltered} type="checkbox" />
+                      </th>
                       <th>Название / Имя</th>
                       <th>Город</th>
                       <th>Отрасль</th>
@@ -1055,6 +1251,13 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
                       const totalForUserRole = getTotalQuestionsForRole(user.profile_role);
                       return (
                         <tr key={user.id} onClick={() => selectUser(user)} className={selected?.id === user.id ? 'selected-row' : ''}>
+                          <td className="select-col" onClick={(event) => event.stopPropagation()}>
+                            <input
+                              checked={selectedUserSet.has(user.id)}
+                              onChange={() => toggleUserSelection(user.id)}
+                              type="checkbox"
+                            />
+                          </td>
                           <td><strong>{user.name}</strong><small>{user.source || 'Источник не указан'}</small></td>
                           <td>{user.city}</td>
                           <td>{user.industry}</td>
