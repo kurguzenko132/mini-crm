@@ -37,6 +37,11 @@ type SavedView = {
   questionRoleTab: 'all' | UserRole;
 };
 
+type ContactQueueItem = {
+  user: EarlyUser;
+  dayOffset: number;
+};
+
 const viewModeLabel: Record<ViewMode, string> = {
   table: 'Пользователи',
   stages: 'Воронка',
@@ -89,6 +94,12 @@ const priorityLabel: Record<Priority, string> = {
   low: 'Низкий',
   medium: 'Средний',
   high: 'Высокий',
+};
+
+const priorityWeight: Record<Priority, number> = {
+  high: 0,
+  medium: 1,
+  low: 2,
 };
 
 const questionTypeLabel: Record<QuestionType, string> = {
@@ -195,6 +206,26 @@ function addDaysStamp(date: string | null, days: number) {
   const start = date ? new Date(`${date}T00:00:00`) : new Date();
   start.setDate(start.getDate() + days);
   return localDateStamp(start);
+}
+
+function dayOffsetFromToday(date: string | null, now = new Date()) {
+  if (!date) return null;
+  const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const target = new Date(`${date}T00:00:00`);
+  return Math.round((target.getTime() - startToday.getTime()) / 86_400_000);
+}
+
+function queueLabel(offset: number) {
+  if (offset < 0) return `Просрочено ${Math.abs(offset)} дн`;
+  if (offset === 0) return 'Сегодня';
+  if (offset === 1) return 'Завтра';
+  return `Через ${offset} дн`;
+}
+
+function queueClass(offset: number) {
+  if (offset < 0) return 'overdue';
+  if (offset === 0) return 'today';
+  return 'planned';
 }
 
 function classForStage(stage: string) {
@@ -334,6 +365,27 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
       .sort((a, b) => (a.next_contact_date ?? '').localeCompare(b.next_contact_date ?? '')),
     [filteredUsers],
   );
+  const contactQueue = useMemo(
+    () => filteredUsers
+      .filter((user) => !user.is_archived && !['Отказ', 'Архив'].includes(user.stage))
+      .map((user) => {
+        const dayOffset = dayOffsetFromToday(user.next_contact_date);
+        if (dayOffset === null) return null;
+        return { user, dayOffset };
+      })
+      .filter((item): item is ContactQueueItem => Boolean(item && item.dayOffset <= 7))
+      .sort((a, b) => (
+        a.dayOffset - b.dayOffset
+        || priorityWeight[a.user.priority] - priorityWeight[b.user.priority]
+        || a.user.name.localeCompare(b.user.name, 'ru')
+      )),
+    [filteredUsers],
+  );
+  const queueCounters = useMemo(() => ({
+    overdue: contactQueue.filter((item) => item.dayOffset < 0).length,
+    today: contactQueue.filter((item) => item.dayOffset === 0).length,
+    upcoming: contactQueue.filter((item) => item.dayOffset > 0).length,
+  }), [contactQueue]);
   const answerStats = useMemo(() => {
     const byUserQuestion = new Map<string, string>();
     const byQuestion = new Map<string, number>();
@@ -1224,6 +1276,36 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
                     <span>{user.city} · {user.next_step || 'Следующий шаг не указан'} · {formatDate(user.next_contact_date)}</span>
                   </button>
                 ))}
+              </div>
+            </section>
+
+            <section className="queue-panel">
+              <div className="queue-head">
+                <h2>Очередь на 7 дней</h2>
+                <p>План касаний на ближайшую неделю по текущему фильтру.</p>
+              </div>
+              <div className="queue-badges">
+                <span className="queue-badge overdue">Просрочено: {queueCounters.overdue}</span>
+                <span className="queue-badge today">Сегодня: {queueCounters.today}</span>
+                <span className="queue-badge planned">1-7 дней: {queueCounters.upcoming}</span>
+              </div>
+              <div className="queue-list">
+                {contactQueue.length === 0 ? (
+                  <span className="muted">В ближайшие 7 дней задач нет.</span>
+                ) : (
+                  contactQueue.slice(0, 12).map((item) => (
+                    <button
+                      key={`${item.user.id}:${item.user.next_contact_date}`}
+                      className={`queue-item ${queueClass(item.dayOffset)}`}
+                      onClick={() => selectUser(item.user)}
+                      type="button"
+                    >
+                      <strong>{item.user.name}</strong>
+                      <span>{item.user.city} · {item.user.next_step || 'Следующий шаг не указан'}</span>
+                      <b>{queueLabel(item.dayOffset)} · {formatDate(item.user.next_contact_date)}</b>
+                    </button>
+                  ))
+                )}
               </div>
             </section>
           </>
