@@ -1009,6 +1009,37 @@ td small {
   color: #d2ddf4;
 }
 
+.score-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.score-pill.green {
+  background: var(--green-soft);
+  color: #8bf5d4;
+}
+
+.score-pill.blue {
+  background: var(--blue-soft);
+  color: #bad6ff;
+}
+
+.score-pill.orange {
+  background: var(--orange-soft);
+  color: #ffd8a4;
+}
+
+.score-pill.red {
+  background: var(--red-soft);
+  color: #ffc1cc;
+}
+
 .priority.low {
   color: #d0dbf0;
   background: var(--gray-soft);

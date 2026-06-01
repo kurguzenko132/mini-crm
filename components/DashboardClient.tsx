@@ -215,6 +215,43 @@ function classForTerms(terms: string) {
   return 'blue';
 }
 
+function leadScore(user: EarlyUser, answerCount: number, totalQuestions: number) {
+  let score = 8;
+
+  const stageWeights: Partial<Record<Stage, number>> = {
+    Найден: 4,
+    Связались: 7,
+    'Интерес есть': 13,
+    'Отправлены условия': 17,
+    Переговоры: 21,
+    Согласован: 24,
+    Подключение: 26,
+    Подключён: 28,
+    'Активно пользуется': 24,
+    Пауза: 3,
+    Отказ: -18,
+    Архив: -20,
+  };
+
+  score += stageWeights[user.stage] ?? 0;
+  if (user.priority === 'high') score += 15;
+  if (user.priority === 'medium') score += 8;
+  if (user.priority === 'low') score += 3;
+  if (user.next_contact_date && isOverdue(user.next_contact_date)) score -= 10;
+  if (totalQuestions > 0) score += Math.round((answerCount / totalQuestions) * 25);
+  if (user.terms.toLowerCase().includes('бесплат')) score += 5;
+  if (user.is_archived || user.stage === 'Архив') score -= 20;
+
+  return Math.max(0, Math.min(100, score));
+}
+
+function scoreClass(score: number) {
+  if (score >= 75) return 'green';
+  if (score >= 55) return 'blue';
+  if (score >= 35) return 'orange';
+  return 'red';
+}
+
 function escapeCsv(value: string | number | null | undefined) {
   const text = String(value ?? '');
   if (/[";\n\r]/.test(text)) return `"${text.replaceAll('"', '""')}"`;
@@ -361,6 +398,42 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
     setSavedViews((current) => [view, ...current].slice(0, 12));
     setSavedViewName('');
     setNotice(`Фильтр «${name}» сохранён.`);
+  }
+
+  async function sendTelegramReminders() {
+    const urgent = todayUsers.slice(0, 25);
+    if (urgent.length === 0) {
+      setNotice('Срочных контактов нет, отправка не требуется.');
+      return;
+    }
+
+    const lines = urgent.map((user, index) => {
+      const when = formatDate(user.next_contact_date);
+      const step = user.next_step || 'Без шага';
+      const contact = user.contact || 'контакт не указан';
+      return `${index + 1}. <b>${user.name}</b> • ${user.city}\n${when} • ${step}\n${contact}`;
+    });
+    const text = [
+      `<b>PilotBase: задачи на сегодня (${localDateStamp()})</b>`,
+      '',
+      ...lines,
+    ].join('\n');
+
+    setLoading(true);
+    try {
+      const response = await fetch('/api/reminders/telegram', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ text }),
+      });
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) throw new Error(payload.error || 'Не удалось отправить напоминание.');
+      setNotice('Напоминания отправлены в Telegram.');
+    } catch (caught) {
+      setNotice(caught instanceof Error ? caught.message : 'Ошибка отправки в Telegram.');
+    } finally {
+      setLoading(false);
+    }
   }
 
   function applySavedView(view: SavedView) {
@@ -1028,6 +1101,14 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
   const maxIndustry = Math.max(...industryStats.map((item) => item.count), 1);
   const maxTerms = Math.max(...termsStats.map((item) => item.count), 1);
   const answeredTotal = answerStats.totalAnswered;
+  const hotLeadCount = filteredUsers.filter((user) => {
+    const answered = getAnswerCount(user.id, user.profile_role);
+    const total = getTotalQuestionsForRole(user.profile_role);
+    return leadScore(user, answered, total) >= 70;
+  }).length;
+  const selectedScore = selected
+    ? leadScore(selected, getAnswerCount(selected.id, selected.profile_role), getTotalQuestionsForRole(selected.profile_role))
+    : 0;
 
   return (
     <div className="app-shell">
@@ -1089,6 +1170,7 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
 
         <section className="metrics-grid">
           <MetricCard label="Всего пользователей" value={metrics.total} icon="👥" />
+          <MetricCard label="Горячие лиды" value={hotLeadCount} icon="🔥" />
           <MetricCard label="Бесплатно" value={metrics.free} icon="🎁" />
           <MetricCard label="Пониженный прайс" value={metrics.discounted} icon="🏷" />
           <MetricCard label="Подключены" value={metrics.connected} icon="✓" />
@@ -1163,6 +1245,7 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
             <button className="secondary-button" onClick={exportAnswersCsv} type="button">CSV ответы</button>
             <button className="secondary-button" onClick={exportJson} type="button">JSON</button>
             <button className="secondary-button" onClick={exportStatsPng} type="button">PNG статистики</button>
+            <button className="secondary-button" disabled={loading} onClick={sendTelegramReminders} type="button">Telegram</button>
             <button className="secondary-button" disabled={loading} onClick={handleLoadDemo} type="button">Загрузить демо</button>
           </div>
         </div>
@@ -1238,6 +1321,7 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
                       <th>Условия</th>
                       <th>Этап</th>
                       <th>Анкета</th>
+                      <th>Score</th>
                       <th>Следующий шаг</th>
                       <th>Дата</th>
                       <th>Приоритет</th>
@@ -1249,6 +1333,7 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
                     {filteredUsers.map((user) => {
                       const answerCount = getAnswerCount(user.id, user.profile_role);
                       const totalForUserRole = getTotalQuestionsForRole(user.profile_role);
+                      const score = leadScore(user, answerCount, totalForUserRole);
                       return (
                         <tr key={user.id} onClick={() => selectUser(user)} className={selected?.id === user.id ? 'selected-row' : ''}>
                           <td className="select-col" onClick={(event) => event.stopPropagation()}>
@@ -1265,6 +1350,7 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
                           <td><span className={`tag ${classForTerms(user.terms)}`}>{user.terms}</span></td>
                           <td><span className={`tag ${classForStage(user.stage)}`}>{user.stage}</span></td>
                           <td><span className={answerCount === totalForUserRole && totalForUserRole > 0 ? 'answer-progress done' : 'answer-progress'}>{answerCount}/{totalForUserRole}</span></td>
+                          <td><span className={`score-pill ${scoreClass(score)}`}>{score}</span></td>
                           <td>{user.next_step || '—'}</td>
                           <td><span className={isOverdue(user.next_contact_date) ? 'date-bad' : isToday(user.next_contact_date) ? 'date-good' : ''}>{formatDate(user.next_contact_date)}</span></td>
                           <td><span className={`priority ${user.priority}`}>{priorityLabel[user.priority]}</span></td>
@@ -1459,6 +1545,7 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
             <div><dt>Источник</dt><dd>{selected.source || '—'}</dd></div>
             <div><dt>Сегмент</dt><dd>{userRoleLabel[selected.profile_role]}</dd></div>
             <div><dt>Анкета</dt><dd>{getAnswerCount(selected.id, selected.profile_role)}/{getTotalQuestionsForRole(selected.profile_role)}</dd></div>
+            <div><dt>Score</dt><dd><span className={`score-pill ${scoreClass(selectedScore)}`}>{selectedScore}</span></dd></div>
           </dl>
 
           <div className="details-actions">
