@@ -62,6 +62,26 @@ create table if not exists public.user_question_answers (
   unique (early_user_id, question_id)
 );
 
+-- Keep schema idempotent for old deployments where these columns did not exist yet.
+alter table if exists public.early_users add column if not exists profile_role text;
+alter table if exists public.early_users alter column profile_role set default 'crm';
+update public.early_users set profile_role = coalesce(nullif(trim(profile_role), ''), 'crm');
+alter table if exists public.early_users alter column profile_role set not null;
+alter table if exists public.early_users drop constraint if exists early_users_profile_role_check;
+alter table if exists public.early_users add constraint early_users_profile_role_check check (profile_role in ('map', 'crm'));
+
+alter table if exists public.marketing_questions add column if not exists target_role text;
+alter table if exists public.marketing_questions alter column target_role set default 'all';
+update public.marketing_questions set target_role = coalesce(nullif(trim(target_role), ''), 'all');
+alter table if exists public.marketing_questions alter column target_role set not null;
+alter table if exists public.marketing_questions drop constraint if exists marketing_questions_target_role_check;
+alter table if exists public.marketing_questions add constraint marketing_questions_target_role_check check (target_role in ('all', 'map', 'crm'));
+
+alter table if exists public.early_users alter column owner_id drop not null;
+alter table if exists public.early_user_events alter column owner_id drop not null;
+alter table if exists public.marketing_questions alter column owner_id drop not null;
+alter table if exists public.user_question_answers alter column owner_id drop not null;
+
 create index if not exists early_users_owner_id_idx on public.early_users(owner_id);
 create index if not exists early_users_profile_role_idx on public.early_users(profile_role);
 create index if not exists early_users_stage_idx on public.early_users(stage);
