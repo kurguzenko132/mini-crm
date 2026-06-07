@@ -1,22 +1,9 @@
 import type { Metadata, Viewport } from 'next';
-import { IBM_Plex_Sans, Space_Grotesk } from 'next/font/google';
 import './globals.css';
 
-const bodyFont = IBM_Plex_Sans({
-  subsets: ['latin', 'cyrillic'],
-  weight: ['400', '500', '600', '700'],
-  variable: '--font-body',
-});
-
-const displayFont = Space_Grotesk({
-  subsets: ['latin'],
-  weight: ['500', '600', '700'],
-  variable: '--font-display',
-});
-
 export const metadata: Metadata = {
-  title: 'PilotBase — ранние пользователи',
-  description: 'Мини-CRM для учета ранних пользователей перед запуском компании',
+  title: 'PilotBase — launch CRM',
+  description: 'Операционный центр для учета ранних пользователей, интервью и запусковой воронки',
 };
 
 export const viewport: Viewport = {
@@ -27,7 +14,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="ru">
-      <body className={`${bodyFont.variable} ${displayFont.variable}`}>{children}</body>
+      <body>{children}</body>
     </html>
   );
 }

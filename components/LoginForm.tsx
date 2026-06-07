@@ -6,11 +6,9 @@ import { createClient } from '@/lib/supabase/browser';
 
 export default function LoginForm() {
   const router = useRouter();
-  const [mode, setMode] = useState<'login' | 'signup'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const isConfigured = useMemo(() => Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY), []);
@@ -18,7 +16,6 @@ export default function LoginForm() {
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
-    setMessage(null);
 
     if (!isConfigured) {
       setError('Сначала заполни .env.local: NEXT_PUBLIC_SUPABASE_URL и NEXT_PUBLIC_SUPABASE_ANON_KEY.');
@@ -33,18 +30,11 @@ export default function LoginForm() {
     setLoading(true);
     try {
       const supabase = createClient();
-      const response = mode === 'login'
-        ? await supabase.auth.signInWithPassword({ email, password })
-        : await supabase.auth.signUp({ email, password });
+      const response = await supabase.auth.signInWithPassword({ email, password });
 
       if (response.error) throw response.error;
-
-      if (mode === 'signup' && !response.data.session) {
-        setMessage('Регистрация создана. Проверь почту, если в Supabase включено подтверждение email.');
-      } else {
-        router.push('/dashboard');
-        router.refresh();
-      }
+      router.push('/dashboard');
+      router.refresh();
     } catch (caught) {
       const text = caught instanceof Error ? caught.message : 'Не удалось выполнить вход.';
       setError(text);
@@ -55,18 +45,23 @@ export default function LoginForm() {
 
   return (
     <main className="auth-page">
+      <section className="auth-intro">
+        <span className="eyebrow">PilotBase workspace</span>
+        <h1>Launch CRM для ранних пользователей</h1>
+        <p>Единое место для лидов, интервью, условий, следующих касаний и воронки подключения.</p>
+        <div className="auth-points">
+          <span>CRM</span>
+          <span>Интервью</span>
+          <span>Воронка</span>
+        </div>
+      </section>
       <section className="auth-card">
         <div className="brand-lockup">
           <div className="brand-mark">P</div>
           <div>
             <h1>PilotBase</h1>
-            <p>Учёт ранних пользователей перед запуском компании</p>
+            <p>Единая база ранних пользователей для маркетинга</p>
           </div>
-        </div>
-
-        <div className="auth-tabs" role="tablist">
-          <button className={mode === 'login' ? 'active' : ''} onClick={() => setMode('login')} type="button">Вход</button>
-          <button className={mode === 'signup' ? 'active' : ''} onClick={() => setMode('signup')} type="button">Регистрация</button>
         </div>
 
         <form onSubmit={handleSubmit} className="auth-form">
@@ -80,7 +75,6 @@ export default function LoginForm() {
           </label>
 
           {error && <div className="alert error">{error}</div>}
-          {message && <div className="alert success">{message}</div>}
           {!isConfigured && (
             <div className="alert warning">
               Проект ещё не подключён к Supabase. Заполни `.env.local` и выполни SQL из `supabase/schema.sql`.
@@ -88,7 +82,7 @@ export default function LoginForm() {
           )}
 
           <button className="primary-button wide" disabled={loading} type="submit">
-            {loading ? 'Проверяю...' : mode === 'login' ? 'Войти' : 'Создать аккаунт'}
+            {loading ? 'Проверяю...' : 'Войти в workspace'}
           </button>
         </form>
       </section>

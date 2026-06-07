@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CONDITIONS, DEFAULT_CITIES, DEFAULT_INDUSTRIES, PRIORITIES, STAGES } from '@/lib/constants';
 import { demoQuestions, demoUsers } from '@/lib/demo-data';
 import { downloadTextFile, usersToCsv } from '@/lib/export';
@@ -29,12 +29,16 @@ type Props = {
 };
 
 type ViewMode = 'table' | 'stages' | 'analytics' | 'questions';
+type SortMode = 'score' | 'due' | 'updated' | 'name';
+type FocusPreset = 'all' | 'urgent' | 'hot' | 'needsInterview' | 'connected';
 type SavedView = {
   id: string;
   name: string;
   filters: Filters;
   userRoleTab: 'all' | UserRole;
   questionRoleTab: 'all' | UserRole;
+  focusPreset?: FocusPreset;
+  sortMode?: SortMode;
 };
 
 type ContactQueueItem = {
@@ -56,12 +60,38 @@ const viewModeDescription: Record<ViewMode, string> = {
   questions: 'Единый список вопросов, которые нужно узнать у каждого клиента',
 };
 
-const navigationItems: Array<{ mode: ViewMode; label: string }> = [
-  { mode: 'table', label: 'Пользователи' },
-  { mode: 'questions', label: 'Интервью' },
-  { mode: 'stages', label: 'Воронка' },
-  { mode: 'analytics', label: 'Аналитика' },
+const navigationItems: Array<{ mode: ViewMode; label: string; icon: string }> = [
+  { mode: 'table', label: 'Пользователи', icon: '01' },
+  { mode: 'questions', label: 'Интервью', icon: '02' },
+  { mode: 'stages', label: 'Воронка', icon: '03' },
+  { mode: 'analytics', label: 'Аналитика', icon: '04' },
 ];
+
+const sortModeLabel: Record<SortMode, string> = {
+  score: 'Сначала высокий score',
+  due: 'Сначала ближайший контакт',
+  updated: 'Сначала обновленные',
+  name: 'По названию',
+};
+
+const focusPresetLabel: Record<FocusPreset, string> = {
+  all: 'Все',
+  urgent: 'Срочные',
+  hot: 'Горячие',
+  needsInterview: 'Без интервью',
+  connected: 'Подключены',
+};
+
+const baseFilters: Filters = {
+  search: '',
+  profileRole: '',
+  city: '',
+  industry: '',
+  terms: '',
+  stage: '',
+  priority: '',
+  onlyToday: false,
+};
 
 const emptyInput: EarlyUserInput = {
   profile_role: 'crm',
@@ -308,33 +338,26 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState<string | null>(initialError);
   const [viewMode, setViewMode] = useState<ViewMode>('table');
+  const [sortMode, setSortMode] = useState<SortMode>('score');
+  const [focusPreset, setFocusPreset] = useState<FocusPreset>('all');
   const [userRoleTab, setUserRoleTab] = useState<'all' | UserRole>('all');
   const [questionRoleTab, setQuestionRoleTab] = useState<'all' | UserRole>('all');
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [bulkStage, setBulkStage] = useState<Stage>(STAGES[0]);
-  const [savedViews, setSavedViews] = useState<SavedView[]>([]);
-  const [savedViewName, setSavedViewName] = useState('');
-  const [filters, setFilters] = useState<Filters>({
-    search: '',
-    profileRole: '',
-    city: '',
-    industry: '',
-    terms: '',
-    stage: '',
-    priority: '',
-    onlyToday: false,
+  const [savedViews, setSavedViews] = useState<SavedView[]>(() => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const raw = window.localStorage.getItem(savedViewsStorageKey);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw) as SavedView[];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
   });
+  const [savedViewName, setSavedViewName] = useState('');
+  const [filters, setFilters] = useState<Filters>(baseFilters);
 
-  const usersAfterFilters = useMemo(() => filterUsers(users, filters), [users, filters]);
-  const filteredUsers = useMemo(
-    () => (userRoleTab === 'all' ? usersAfterFilters : usersAfterFilters.filter((user) => user.profile_role === userRoleTab)),
-    [usersAfterFilters, userRoleTab],
-  );
-  const metrics = useMemo(() => dashboardMetrics(filteredUsers), [filteredUsers]);
-  const stages = useMemo(() => stageCounts(filteredUsers), [filteredUsers]);
-  const cityStats = useMemo(() => topCounts(filteredUsers, 'city', 7), [filteredUsers]);
-  const industryStats = useMemo(() => topCounts(filteredUsers, 'industry', 7), [filteredUsers]);
-  const termsStats = useMemo(() => topCounts(filteredUsers, 'terms', 7), [filteredUsers]);
   const questionsSorted = useMemo(
     () => [...questions].sort((a, b) => a.sort_order - b.sort_order || a.created_at.localeCompare(b.created_at)),
     [questions],
@@ -358,6 +381,80 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
     map: new Set(activeQuestions.filter((question) => question.target_role === 'all' || question.target_role === 'map').map((question) => question.id)),
     crm: new Set(activeQuestions.filter((question) => question.target_role === 'all' || question.target_role === 'crm').map((question) => question.id)),
   }), [activeQuestions]);
+  const answerStats = useMemo(() => {
+    const byUserQuestion = new Map<string, string>();
+    const byQuestion = new Map<string, number>();
+    let totalAnswered = 0;
+
+    for (const answer of answers) {
+      const answerText = answer.answer_text ?? '';
+      byUserQuestion.set(`${answer.early_user_id}:${answer.question_id}`, answerText);
+
+      if (!answerText.trim()) continue;
+
+      totalAnswered += 1;
+      byQuestion.set(answer.question_id, (byQuestion.get(answer.question_id) ?? 0) + 1);
+    }
+
+    return { byUserQuestion, byQuestion, totalAnswered };
+  }, [answers]);
+  const getAnswer = useCallback((userId: string, questionId: string) => (
+    answerStats.byUserQuestion.get(`${userId}:${questionId}`) ?? ''
+  ), [answerStats]);
+  const getAnswerCount = useCallback((userId: string, role: UserRole) => {
+    const roleQuestionIds = activeQuestionIdsByRole[role];
+    let filled = 0;
+    roleQuestionIds.forEach((questionId) => {
+      if (answerStats.byUserQuestion.get(`${userId}:${questionId}`)?.trim()) filled += 1;
+    });
+    return filled;
+  }, [activeQuestionIdsByRole, answerStats]);
+  const getTotalQuestionsForRole = useCallback((role: UserRole) => (
+    activeQuestionIdsByRole[role].size
+  ), [activeQuestionIdsByRole]);
+  const getQuestionsForRole = useCallback((role: UserRole) => (
+    activeQuestions.filter((question) => question.target_role === 'all' || question.target_role === role)
+  ), [activeQuestions]);
+  const getQuestionAnswerCount = useCallback((questionId: string) => (
+    answerStats.byQuestion.get(questionId) ?? 0
+  ), [answerStats]);
+  const usersAfterFilters = useMemo(() => filterUsers(users, filters), [users, filters]);
+  const roleFilteredUsers = useMemo(
+    () => (userRoleTab === 'all' ? usersAfterFilters : usersAfterFilters.filter((user) => user.profile_role === userRoleTab)),
+    [usersAfterFilters, userRoleTab],
+  );
+  const filteredUsers = useMemo(() => roleFilteredUsers.filter((user) => {
+    if (focusPreset === 'urgent') return isToday(user.next_contact_date) || isOverdue(user.next_contact_date);
+    if (focusPreset === 'hot') {
+      const answered = getAnswerCount(user.id, user.profile_role);
+      const total = getTotalQuestionsForRole(user.profile_role);
+      return user.priority === 'high' || leadScore(user, answered, total) >= 70;
+    }
+    if (focusPreset === 'needsInterview') {
+      const total = getTotalQuestionsForRole(user.profile_role);
+      return total > 0 && getAnswerCount(user.id, user.profile_role) < total;
+    }
+    if (focusPreset === 'connected') return ['Подключён', 'Активно пользуется'].includes(user.stage);
+    return true;
+  }), [roleFilteredUsers, focusPreset, getAnswerCount, getTotalQuestionsForRole]);
+  const sortedUsers = useMemo(() => [...filteredUsers].sort((a, b) => {
+    if (sortMode === 'name') return a.name.localeCompare(b.name, 'ru');
+    if (sortMode === 'updated') return b.updated_at.localeCompare(a.updated_at);
+    if (sortMode === 'due') {
+      const aDate = a.next_contact_date ?? '9999-12-31';
+      const bDate = b.next_contact_date ?? '9999-12-31';
+      return aDate.localeCompare(bDate) || priorityWeight[a.priority] - priorityWeight[b.priority];
+    }
+
+    const aScore = leadScore(a, getAnswerCount(a.id, a.profile_role), getTotalQuestionsForRole(a.profile_role));
+    const bScore = leadScore(b, getAnswerCount(b.id, b.profile_role), getTotalQuestionsForRole(b.profile_role));
+    return bScore - aScore || priorityWeight[a.priority] - priorityWeight[b.priority] || a.name.localeCompare(b.name, 'ru');
+  }), [filteredUsers, sortMode, getAnswerCount, getTotalQuestionsForRole]);
+  const metrics = useMemo(() => dashboardMetrics(filteredUsers), [filteredUsers]);
+  const stages = useMemo(() => stageCounts(filteredUsers), [filteredUsers]);
+  const cityStats = useMemo(() => topCounts(filteredUsers, 'city', 7), [filteredUsers]);
+  const industryStats = useMemo(() => topCounts(filteredUsers, 'industry', 7), [filteredUsers]);
+  const termsStats = useMemo(() => topCounts(filteredUsers, 'terms', 7), [filteredUsers]);
   const todayUsers = useMemo(
     () => filteredUsers
       .filter((user) => !user.is_archived && !['Отказ', 'Архив'].includes(user.stage))
@@ -386,51 +483,80 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
     today: contactQueue.filter((item) => item.dayOffset === 0).length,
     upcoming: contactQueue.filter((item) => item.dayOffset > 0).length,
   }), [contactQueue]);
-  const answerStats = useMemo(() => {
-    const byUserQuestion = new Map<string, string>();
-    const byQuestion = new Map<string, number>();
-    let totalAnswered = 0;
-
-    for (const answer of answers) {
-      const answerText = answer.answer_text ?? '';
-      byUserQuestion.set(`${answer.early_user_id}:${answer.question_id}`, answerText);
-
-      if (!answerText.trim()) continue;
-
-      totalAnswered += 1;
-      byQuestion.set(answer.question_id, (byQuestion.get(answer.question_id) ?? 0) + 1);
-    }
-
-    return { byUserQuestion, byQuestion, totalAnswered };
-  }, [answers]);
 
   const cityOptions = useMemo(() => uniqueSorted([...DEFAULT_CITIES, ...users.map((user) => user.city)]), [users]);
   const industryOptions = useMemo(() => uniqueSorted([...DEFAULT_INDUSTRIES, ...users.map((user) => user.industry)]), [users]);
   const termsOptions = useMemo(() => uniqueSorted([...CONDITIONS, ...users.map((user) => user.terms)]), [users]);
-  const selectedUserSet = useMemo(() => new Set(selectedUserIds), [selectedUserIds]);
+  const focusPresetItems = useMemo(() => {
+    const countByPreset = (preset: FocusPreset) => roleFilteredUsers.filter((user) => {
+      if (preset === 'urgent') return isToday(user.next_contact_date) || isOverdue(user.next_contact_date);
+      if (preset === 'hot') {
+        const answered = getAnswerCount(user.id, user.profile_role);
+        const total = getTotalQuestionsForRole(user.profile_role);
+        return user.priority === 'high' || leadScore(user, answered, total) >= 70;
+      }
+      if (preset === 'needsInterview') {
+        const total = getTotalQuestionsForRole(user.profile_role);
+        return total > 0 && getAnswerCount(user.id, user.profile_role) < total;
+      }
+      if (preset === 'connected') return ['Подключён', 'Активно пользуется'].includes(user.stage);
+      return true;
+    }).length;
+
+    return (Object.keys(focusPresetLabel) as FocusPreset[]).map((preset) => ({
+      value: preset,
+      label: focusPresetLabel[preset],
+      count: countByPreset(preset),
+    }));
+  }, [roleFilteredUsers, getAnswerCount, getTotalQuestionsForRole]);
+  const filteredUserIds = useMemo(() => new Set(filteredUsers.map((user) => user.id)), [filteredUsers]);
+  const selectedFilteredUserIds = useMemo(
+    () => selectedUserIds.filter((id) => filteredUserIds.has(id)),
+    [selectedUserIds, filteredUserIds],
+  );
+  const selectedUserSet = useMemo(() => new Set(selectedFilteredUserIds), [selectedFilteredUserIds]);
   const allFilteredSelected = filteredUsers.length > 0 && filteredUsers.every((user) => selectedUserSet.has(user.id));
+  const activeFilterCount = useMemo(() => (
+    Object.values(filters).filter(Boolean).length
+    + (userRoleTab === 'all' ? 0 : 1)
+    + (focusPreset === 'all' ? 0 : 1)
+  ), [filters, userRoleTab, focusPreset]);
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(savedViewsStorageKey);
-      if (!raw) return;
-      const parsed = JSON.parse(raw) as SavedView[];
-      if (Array.isArray(parsed)) setSavedViews(parsed);
-    } catch {
-      // ignore invalid local data
-    }
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem(savedViewsStorageKey, JSON.stringify(savedViews));
+    window.localStorage.setItem(savedViewsStorageKey, JSON.stringify(savedViews));
   }, [savedViews]);
 
   useEffect(() => {
-    setSelectedUserIds((current) => current.filter((id) => filteredUsers.some((user) => user.id === id)));
-  }, [filteredUsers]);
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key !== 'Escape') return;
+      if (modalOpen) {
+        setModalOpen(false);
+        return;
+      }
+      if (questionModalOpen) {
+        setQuestionModalOpen(false);
+        return;
+      }
+      if (selected) {
+        selectedUserIdRef.current = null;
+        setSelected(null);
+        setEvents([]);
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [modalOpen, questionModalOpen, selected]);
 
   function updateFilter<K extends keyof Filters>(key: K, value: Filters[K]) {
     setFilters((current) => ({ ...current, [key]: value }));
+  }
+
+  function resetWorkspaceFilters() {
+    setFilters(baseFilters);
+    setUserRoleTab('all');
+    setFocusPreset('all');
+    setSelectedUserIds([]);
   }
 
   function saveCurrentView() {
@@ -446,6 +572,8 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
       filters,
       userRoleTab,
       questionRoleTab,
+      focusPreset,
+      sortMode,
     };
     setSavedViews((current) => [view, ...current].slice(0, 12));
     setSavedViewName('');
@@ -492,6 +620,8 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
     setFilters(view.filters);
     setUserRoleTab(view.userRoleTab);
     setQuestionRoleTab(view.questionRoleTab);
+    setFocusPreset(view.focusPreset ?? 'all');
+    setSortMode(view.sortMode ?? 'score');
     setNotice(`Применён фильтр: ${view.name}`);
   }
 
@@ -514,31 +644,6 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
       filteredUsers.forEach((user) => next.add(user.id));
       return Array.from(next);
     });
-  }
-
-  function getAnswer(userId: string, questionId: string) {
-    return answerStats.byUserQuestion.get(`${userId}:${questionId}`) ?? '';
-  }
-
-  function getAnswerCount(userId: string, role: UserRole) {
-    const roleQuestionIds = activeQuestionIdsByRole[role];
-    let filled = 0;
-    roleQuestionIds.forEach((questionId) => {
-      if (answerStats.byUserQuestion.get(`${userId}:${questionId}`)?.trim()) filled += 1;
-    });
-    return filled;
-  }
-
-  function getTotalQuestionsForRole(role: UserRole) {
-    return activeQuestionIdsByRole[role].size;
-  }
-
-  function getQuestionsForRole(role: UserRole) {
-    return activeQuestions.filter((question) => question.target_role === 'all' || question.target_role === role);
-  }
-
-  function getQuestionAnswerCount(questionId: string) {
-    return answerStats.byQuestion.get(questionId) ?? 0;
   }
 
   function buildAnswerDrafts(userId: string, sourceAnswers = answers, sourceQuestions = selectedQuestions) {
@@ -810,13 +915,13 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
   }
 
   async function bulkChangeStage(stage: Stage) {
-    if (selectedUserIds.length === 0) return;
+    if (selectedFilteredUserIds.length === 0) return;
     setLoading(true);
     try {
       const { data, error } = await supabase
         .from('early_users')
         .update({ stage })
-        .in('id', selectedUserIds)
+        .in('id', selectedFilteredUserIds)
         .select('*');
       if (error) throw error;
 
@@ -833,7 +938,7 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
   }
 
   async function bulkShiftContact(days: number) {
-    if (selectedUserIds.length === 0) return;
+    if (selectedFilteredUserIds.length === 0) return;
     const selectedRows = users.filter((user) => selectedUserSet.has(user.id));
     if (selectedRows.length === 0) return;
 
@@ -867,13 +972,13 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
   }
 
   async function bulkDeleteUsers() {
-    if (selectedUserIds.length === 0) return;
-    const ok = confirm(`Удалить ${selectedUserIds.length} пользователей? Действие необратимо.`);
+    if (selectedFilteredUserIds.length === 0) return;
+    const ok = confirm(`Удалить ${selectedFilteredUserIds.length} пользователей? Действие необратимо.`);
     if (!ok) return;
 
     setLoading(true);
     try {
-      const { error } = await supabase.from('early_users').delete().in('id', selectedUserIds);
+      const { error } = await supabase.from('early_users').delete().in('id', selectedFilteredUserIds);
       if (error) throw error;
 
       setUsers((current) => current.filter((user) => !selectedUserSet.has(user.id)));
@@ -1142,7 +1247,7 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
     const element = document.getElementById('stats-export-area');
     if (!element) return;
     const html2canvas = (await import('html2canvas')).default;
-    const canvas = await html2canvas(element, { backgroundColor: '#080b12', scale: 2 });
+    const canvas = await html2canvas(element, { backgroundColor: '#f6f8fb', scale: 2 });
     const link = document.createElement('a');
     link.href = canvas.toDataURL('image/png');
     link.download = `pilotbase-stats-${localDateStamp()}.png`;
@@ -1158,6 +1263,16 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
     const total = getTotalQuestionsForRole(user.profile_role);
     return leadScore(user, answered, total) >= 70;
   }).length;
+  const conversionRate = metrics.total > 0 ? Math.round((metrics.connected / metrics.total) * 100) : 0;
+  const totalQuestionSlots = filteredUsers.reduce((sum, user) => sum + getTotalQuestionsForRole(user.profile_role), 0);
+  const answeredQuestionSlots = filteredUsers.reduce((sum, user) => sum + getAnswerCount(user.id, user.profile_role), 0);
+  const questionCoverage = totalQuestionSlots > 0 ? Math.round((answeredQuestionSlots / totalQuestionSlots) * 100) : 0;
+  const averageLeadScore = filteredUsers.length > 0
+    ? Math.round(filteredUsers.reduce((sum, user) => sum + leadScore(user, getAnswerCount(user.id, user.profile_role), getTotalQuestionsForRole(user.profile_role)), 0) / filteredUsers.length)
+    : 0;
+  const selectedAnswerCount = selected ? getAnswerCount(selected.id, selected.profile_role) : 0;
+  const selectedTotalQuestions = selected ? getTotalQuestionsForRole(selected.profile_role) : 0;
+  const selectedAnswerProgress = selectedTotalQuestions > 0 ? Math.round((selectedAnswerCount / selectedTotalQuestions) * 100) : 0;
   const selectedScore = selected
     ? leadScore(selected, getAnswerCount(selected.id, selected.profile_role), getTotalQuestionsForRole(selected.profile_role))
     : 0;
@@ -1169,7 +1284,7 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
           <div className="brand-mark">P</div>
           <div>
             <span>PilotBase</span>
-            <small>Marketing cockpit</small>
+            <small>Launch CRM</small>
           </div>
         </div>
         <nav className="sidebar-nav" aria-label="Основное меню">
@@ -1180,35 +1295,41 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
               type="button"
               onClick={() => setViewMode(item.mode)}
             >
-              {item.label}
+              <span className="nav-index">{item.icon}</span>
+              <span>{item.label}</span>
             </button>
           ))}
         </nav>
+        <div className="sidebar-status">
+          <span>Сегодня</span>
+          <strong>{metrics.today}</strong>
+          <small>Просрочено: {metrics.overdue}</small>
+        </div>
         <div className="sidebar-footer">
           <div className="avatar">PB</div>
           <div className="sidebar-user">
             <strong>Общая база</strong>
-            <span>Доступ без регистрации</span>
+            <span>{users.length} записей в workspace</span>
           </div>
-          <div className="ghost-icon" aria-hidden="true">∞</div>
         </div>
       </aside>
 
       <main className="main-content">
         <header className="topbar">
           <div>
+            <span className="eyebrow">Операционный центр запуска</span>
             <h1>{viewModeLabel[viewMode]}</h1>
             <p>{viewModeDescription[viewMode]}</p>
           </div>
           <div className="topbar-actions">
             <div className="search-box">
-              <span>⌕</span>
+              <span aria-hidden="true">/</span>
               <input value={filters.search} onChange={(event) => updateFilter('search', event.target.value)} placeholder="Поиск по имени, городу, отрасли, заметкам" />
             </div>
             {viewMode === 'questions' ? (
-              <button className="primary-button" onClick={openCreateQuestionModal} type="button">+ Добавить вопрос</button>
+              <button className="primary-button" onClick={openCreateQuestionModal} type="button"><span aria-hidden="true">+</span> Добавить вопрос</button>
             ) : (
-              <button className="primary-button" onClick={openCreateModal} type="button">+ Добавить пользователя</button>
+              <button className="primary-button" onClick={openCreateModal} type="button"><span aria-hidden="true">+</span> Добавить пользователя</button>
             )}
           </div>
         </header>
@@ -1221,73 +1342,100 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
         )}
 
         <section className="metrics-grid">
-          <MetricCard label="Всего пользователей" value={metrics.total} icon="👥" />
-          <MetricCard label="Горячие лиды" value={hotLeadCount} icon="🔥" />
-          <MetricCard label="Бесплатно" value={metrics.free} icon="🎁" />
-          <MetricCard label="Пониженный прайс" value={metrics.discounted} icon="🏷" />
-          <MetricCard label="Подключены" value={metrics.connected} icon="✓" />
-          <MetricCard label="Вопросы / ответы" value={`${visibleActiveQuestions.length}/${answeredTotal}`} icon="❔" tone="warning" />
+          <MetricCard label="Активная база" value={metrics.total} icon="AB" />
+          <MetricCard label="Горячие лиды" value={hotLeadCount} icon="HI" />
+          <MetricCard label="Средний score" value={averageLeadScore} icon="SC" />
+          <MetricCard label="Подключены" value={`${metrics.connected} · ${conversionRate}%`} icon="CV" />
+          <MetricCard label="Срочные контакты" value={metrics.today + metrics.overdue} icon="DQ" tone="warning" />
+          <MetricCard label="Анкета заполнена" value={`${questionCoverage}%`} icon="QA" />
         </section>
 
         {viewMode !== 'questions' && (
-          <>
+          <section className="ops-grid">
             <section className="filters-card">
-              <select value={filters.city} onChange={(event) => updateFilter('city', event.target.value)}>
-                <option value="">Город</option>
-                {cityOptions.map((city) => <option key={city} value={city}>{city}</option>)}
-              </select>
-              <select value={filters.industry} onChange={(event) => updateFilter('industry', event.target.value)}>
-                <option value="">Отрасль</option>
-                {industryOptions.map((industry) => <option key={industry} value={industry}>{industry}</option>)}
-              </select>
-              <select value={filters.terms} onChange={(event) => updateFilter('terms', event.target.value)}>
-                <option value="">Условия</option>
-                {termsOptions.map((terms) => <option key={terms} value={terms}>{terms}</option>)}
-              </select>
-              <select value={filters.stage} onChange={(event) => updateFilter('stage', event.target.value)}>
-                <option value="">Этап</option>
-                {STAGES.map((stage) => <option key={stage} value={stage}>{stage}</option>)}
-              </select>
-              <select value={filters.priority} onChange={(event) => updateFilter('priority', event.target.value)}>
-                <option value="">Приоритет</option>
-                {PRIORITIES.map((priority) => <option key={priority.value} value={priority.value}>{priority.label}</option>)}
-              </select>
-              <select value={filters.profileRole} onChange={(event) => updateFilter('profileRole', event.target.value as Filters['profileRole'])}>
-                <option value="">Сегмент</option>
-                <option value="map">Пользователи карты</option>
-                <option value="crm">Пользователи CRM</option>
-              </select>
-              <label className="checkbox-filter">
-                <input checked={filters.onlyToday} onChange={(event) => updateFilter('onlyToday', event.target.checked)} type="checkbox" />
-                Только сегодня
-              </label>
-              <button className="secondary-button" type="button" onClick={() => setFilters({ search: '', profileRole: '', city: '', industry: '', terms: '', stage: '', priority: '', onlyToday: false })}>Сбросить</button>
+              <div className="panel-heading compact">
+                <div>
+                  <h2>Фокус</h2>
+                  <p>{activeFilterCount > 0 ? `Активных условий: ${activeFilterCount}` : 'Вся база без ограничений'}</p>
+                </div>
+                <button className="secondary-button icon-button" type="button" onClick={resetWorkspaceFilters} title="Сбросить фильтры">×</button>
+              </div>
+              <div className="focus-presets" role="tablist" aria-label="Фокус списка">
+                {focusPresetItems.map((item) => (
+                  <button
+                    key={item.value}
+                    className={focusPreset === item.value ? 'active' : ''}
+                    onClick={() => setFocusPreset(item.value)}
+                    type="button"
+                  >
+                    <span>{item.label}</span>
+                    <strong>{item.count}</strong>
+                  </button>
+                ))}
+              </div>
+              <div className="filters-grid">
+                <select value={filters.city} onChange={(event) => updateFilter('city', event.target.value)}>
+                  <option value="">Город</option>
+                  {cityOptions.map((city) => <option key={city} value={city}>{city}</option>)}
+                </select>
+                <select value={filters.industry} onChange={(event) => updateFilter('industry', event.target.value)}>
+                  <option value="">Отрасль</option>
+                  {industryOptions.map((industry) => <option key={industry} value={industry}>{industry}</option>)}
+                </select>
+                <select value={filters.terms} onChange={(event) => updateFilter('terms', event.target.value)}>
+                  <option value="">Условия</option>
+                  {termsOptions.map((terms) => <option key={terms} value={terms}>{terms}</option>)}
+                </select>
+                <select value={filters.stage} onChange={(event) => updateFilter('stage', event.target.value)}>
+                  <option value="">Этап</option>
+                  {STAGES.map((stage) => <option key={stage} value={stage}>{stage}</option>)}
+                </select>
+                <select value={filters.priority} onChange={(event) => updateFilter('priority', event.target.value)}>
+                  <option value="">Приоритет</option>
+                  {PRIORITIES.map((priority) => <option key={priority.value} value={priority.value}>{priority.label}</option>)}
+                </select>
+                <select value={filters.profileRole} onChange={(event) => updateFilter('profileRole', event.target.value as Filters['profileRole'])}>
+                  <option value="">Сегмент</option>
+                  <option value="map">Пользователи карты</option>
+                  <option value="crm">Пользователи CRM</option>
+                </select>
+                <label className="checkbox-filter">
+                  <input checked={filters.onlyToday} onChange={(event) => updateFilter('onlyToday', event.target.checked)} type="checkbox" />
+                  Только сегодня
+                </label>
+              </div>
             </section>
 
             <section className="quick-panel">
-              <div>
-                <h2>Сегодня нужно связаться</h2>
-                <p>Показывает задачи на сегодня и просроченные контакты.</p>
+              <div className="panel-heading compact">
+                <div>
+                  <h2>Сегодня</h2>
+                  <p>Срочные и просроченные касания</p>
+                </div>
+                <strong>{todayUsers.length}</strong>
               </div>
               <div className="quick-list">
-                {todayUsers.length === 0 ? <span className="muted">Нет срочных контактов</span> : todayUsers.slice(0, 4).map((user) => (
+                {todayUsers.length === 0 ? <span className="muted">Нет срочных контактов</span> : todayUsers.slice(0, 5).map((user) => (
                   <button className={isOverdue(user.next_contact_date) ? 'quick-item overdue' : 'quick-item'} key={user.id} onClick={() => selectUser(user)} type="button">
                     <strong>{user.name}</strong>
-                    <span>{user.city} · {user.next_step || 'Следующий шаг не указан'} · {formatDate(user.next_contact_date)}</span>
+                    <span>{user.city} · {user.next_step || 'Следующий шаг не указан'}</span>
+                    <b>{formatDate(user.next_contact_date)}</b>
                   </button>
                 ))}
               </div>
             </section>
 
             <section className="queue-panel">
-              <div className="queue-head">
-                <h2>Очередь на 7 дней</h2>
-                <p>План касаний на ближайшую неделю по текущему фильтру.</p>
-              </div>
-              <div className="queue-badges">
-                <span className="queue-badge overdue">Просрочено: {queueCounters.overdue}</span>
-                <span className="queue-badge today">Сегодня: {queueCounters.today}</span>
-                <span className="queue-badge planned">1-7 дней: {queueCounters.upcoming}</span>
+              <div className="panel-heading compact">
+                <div>
+                  <h2>План на 7 дней</h2>
+                  <p>Очередь касаний по текущей выборке</p>
+                </div>
+                <div className="queue-badges">
+                  <span className="queue-badge overdue">{queueCounters.overdue}</span>
+                  <span className="queue-badge today">{queueCounters.today}</span>
+                  <span className="queue-badge planned">{queueCounters.upcoming}</span>
+                </div>
               </div>
               <div className="queue-list">
                 {contactQueue.length === 0 ? (
@@ -1308,27 +1456,40 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
                 )}
               </div>
             </section>
-          </>
+          </section>
         )}
 
         <div className="view-switch">
-          {navigationItems.map((item) => (
-            <button
-              key={item.mode}
-              className={viewMode === item.mode ? 'active' : ''}
-              onClick={() => setViewMode(item.mode)}
-              type="button"
-            >
-              {item.label}
-            </button>
-          ))}
-          <div className="export-actions">
-            <button className="secondary-button" onClick={exportCsv} type="button">CSV</button>
-            <button className="secondary-button" onClick={exportAnswersCsv} type="button">CSV ответы</button>
-            <button className="secondary-button" onClick={exportJson} type="button">JSON</button>
-            <button className="secondary-button" onClick={exportStatsPng} type="button">PNG статистики</button>
-            <button className="secondary-button" disabled={loading} onClick={sendTelegramReminders} type="button">Telegram</button>
-            <button className="secondary-button" disabled={loading} onClick={handleLoadDemo} type="button">Загрузить демо</button>
+          <div className="section-tabs">
+            {navigationItems.map((item) => (
+              <button
+                key={item.mode}
+                className={viewMode === item.mode ? 'active' : ''}
+                onClick={() => setViewMode(item.mode)}
+                type="button"
+              >
+                <span aria-hidden="true">{item.icon}</span>
+                {item.label}
+              </button>
+            ))}
+          </div>
+          <div className="toolbar-actions">
+            {viewMode !== 'questions' && (
+              <label className="sort-control">
+                <span>Сортировка</span>
+                <select value={sortMode} onChange={(event) => setSortMode(event.target.value as SortMode)}>
+                  {(Object.keys(sortModeLabel) as SortMode[]).map((mode) => <option key={mode} value={mode}>{sortModeLabel[mode]}</option>)}
+                </select>
+              </label>
+            )}
+            <div className="export-actions">
+              <button className="secondary-button" onClick={exportCsv} type="button"><span aria-hidden="true">↓</span> CSV</button>
+              <button className="secondary-button" onClick={exportAnswersCsv} type="button"><span aria-hidden="true">↓</span> Ответы</button>
+              <button className="secondary-button" onClick={exportJson} type="button"><span aria-hidden="true">↓</span> JSON</button>
+              <button className="secondary-button" onClick={exportStatsPng} type="button"><span aria-hidden="true">▣</span> PNG</button>
+              <button className="secondary-button" disabled={loading} onClick={sendTelegramReminders} type="button"><span aria-hidden="true">↗</span> Telegram</button>
+              <button className="secondary-button" disabled={loading} onClick={handleLoadDemo} type="button"><span aria-hidden="true">+</span> Демо</button>
+            </div>
           </div>
         </div>
 
@@ -1359,10 +1520,10 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
           <section className="content-card table-card">
             <div className="card-heading">
               <div>
-                <h2>Список пользователей</h2>
-                <p>Найдено: {filteredUsers.length} из {usersAfterFilters.length}</p>
+                <h2>Рабочий список</h2>
+                <p>Показано: {sortedUsers.length} из {roleFilteredUsers.length}. Сортировка: {sortModeLabel[sortMode]}</p>
               </div>
-              <button className="secondary-button" onClick={refreshUsers} type="button">Обновить</button>
+              <button className="secondary-button" onClick={refreshUsers} type="button"><span aria-hidden="true">↻</span> Обновить</button>
             </div>
             <div className="role-tabs">
               {roleTabs.map((tab) => (
@@ -1377,16 +1538,16 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
               ))}
             </div>
             <div className="bulk-actions-bar">
-              <span>Выбрано: {selectedUserIds.length}</span>
+              <span>Выбрано: {selectedFilteredUserIds.length}</span>
               <select value={bulkStage} onChange={(event) => setBulkStage(event.target.value as Stage)}>
                 {STAGES.map((stage) => <option key={stage} value={stage}>{stage}</option>)}
               </select>
-              <button className="secondary-button" disabled={loading || selectedUserIds.length === 0} onClick={() => bulkChangeStage(bulkStage)} type="button">Сменить этап</button>
-              <button className="secondary-button" disabled={loading || selectedUserIds.length === 0} onClick={() => bulkShiftContact(3)} type="button">+3 дня</button>
-              <button className="secondary-button" disabled={loading || selectedUserIds.length === 0} onClick={() => bulkShiftContact(7)} type="button">+7 дней</button>
-              <button className="secondary-button" disabled={loading || selectedUserIds.length === 0} onClick={bulkDeleteUsers} type="button">Удалить выбранных</button>
+              <button className="secondary-button" disabled={loading || selectedFilteredUserIds.length === 0} onClick={() => bulkChangeStage(bulkStage)} type="button">Сменить этап</button>
+              <button className="secondary-button" disabled={loading || selectedFilteredUserIds.length === 0} onClick={() => bulkShiftContact(3)} type="button">+3 дня</button>
+              <button className="secondary-button" disabled={loading || selectedFilteredUserIds.length === 0} onClick={() => bulkShiftContact(7)} type="button">+7 дней</button>
+              <button className="secondary-button" disabled={loading || selectedFilteredUserIds.length === 0} onClick={bulkDeleteUsers} type="button">Удалить выбранных</button>
             </div>
-            {filteredUsers.length === 0 ? (
+            {sortedUsers.length === 0 ? (
               <EmptyState onCreate={openCreateModal} onDemo={handleLoadDemo} />
             ) : (
               <div className="table-wrap">
@@ -1412,7 +1573,7 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredUsers.map((user) => {
+                    {sortedUsers.map((user) => {
                       const answerCount = getAnswerCount(user.id, user.profile_role);
                       const totalForUserRole = getTotalQuestionsForRole(user.profile_role);
                       const score = leadScore(user, answerCount, totalForUserRole);
@@ -1611,10 +1772,29 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
 
       {selected && (
         <aside className="details-panel">
-          <button className="panel-close" onClick={() => setSelectedUser(null)} type="button">×</button>
+          <button className="panel-close" onClick={() => setSelectedUser(null)} type="button" title="Закрыть">×</button>
           <div className="details-head">
-            <h2>{selected.name}</h2>
+            <div>
+              <span className="eyebrow">Карточка лида</span>
+              <h2>{selected.name}</h2>
+            </div>
             <span className={`tag ${classForStage(selected.stage)}`}>{selected.stage}</span>
+          </div>
+          <div className="lead-summary">
+            <div className={`lead-score ${scoreClass(selectedScore)}`}>
+              <span>Score</span>
+              <strong>{selectedScore}</strong>
+            </div>
+            <div>
+              <span>Интервью</span>
+              <strong>{selectedAnswerProgress}%</strong>
+              <small>{selectedAnswerCount}/{selectedTotalQuestions} ответов</small>
+            </div>
+            <div>
+              <span>Следующий контакт</span>
+              <strong className={isOverdue(selected.next_contact_date) ? 'date-bad' : isToday(selected.next_contact_date) ? 'date-good' : ''}>{formatDate(selected.next_contact_date)}</strong>
+              <small>{selected.next_step || 'Шаг не указан'}</small>
+            </div>
           </div>
           <dl className="details-list">
             <div><dt>Город</dt><dd>{selected.city}</dd></div>
@@ -1626,13 +1806,13 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
             <div><dt>Приоритет</dt><dd>{priorityLabel[selected.priority]}</dd></div>
             <div><dt>Источник</dt><dd>{selected.source || '—'}</dd></div>
             <div><dt>Сегмент</dt><dd>{userRoleLabel[selected.profile_role]}</dd></div>
-            <div><dt>Анкета</dt><dd>{getAnswerCount(selected.id, selected.profile_role)}/{getTotalQuestionsForRole(selected.profile_role)}</dd></div>
+            <div><dt>Анкета</dt><dd>{selectedAnswerCount}/{selectedTotalQuestions}</dd></div>
             <div><dt>Score</dt><dd><span className={`score-pill ${scoreClass(selectedScore)}`}>{selectedScore}</span></dd></div>
           </dl>
 
           <div className="details-actions">
-            <button className="primary-button" onClick={() => openEditModal(selected)} type="button">Редактировать</button>
-            <button className="secondary-button" onClick={() => handleDelete(selected)} type="button">Удалить</button>
+            <button className="primary-button" onClick={() => openEditModal(selected)} type="button"><span aria-hidden="true">✎</span> Редактировать</button>
+            <button className="secondary-button" onClick={() => handleDelete(selected)} type="button"><span aria-hidden="true">×</span> Удалить</button>
           </div>
 
           <section className="mini-section">
@@ -1785,7 +1965,7 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
 function MetricCard({ label, value, icon, tone }: { label: string; value: number | string; icon: string; tone?: 'warning' }) {
   return (
     <article className={`metric-card ${tone ?? ''}`}>
-      <div className="metric-icon">{icon}</div>
+      <div className="metric-icon" aria-hidden="true">{icon}</div>
       <div>
         <span>{label}</span>
         <strong>{value}</strong>
