@@ -65,6 +65,30 @@ type MarketingPillar = {
   dependsOn: MarketingPillarKey[];
   next: MarketingPillarKey[];
 };
+type MarketingGoalMetric =
+  | 'interviewedUsers'
+  | 'questionCoverage'
+  | 'activeLeads'
+  | 'contactPlanCoverage'
+  | 'hotLeads'
+  | 'conversionRate'
+  | 'sourceCoverage'
+  | 'marketingReadiness'
+  | 'caseCandidates'
+  | 'contentBrandReadiness';
+type MarketingGoalPriority = 'critical' | 'high' | 'medium';
+type MarketingGoal = {
+  id: string;
+  pillar: MarketingPillarKey;
+  title: string;
+  description: string;
+  metric: MarketingGoalMetric;
+  target: number;
+  unit: string;
+  horizon: string;
+  priority: MarketingGoalPriority;
+  plan: string[];
+};
 type SavedView = {
   id: string;
   name: string;
@@ -300,6 +324,176 @@ const workPriorityLabel: Record<MarketingWorkPriority, string> = {
   low: 'Низкий',
   medium: 'Средний',
   high: 'Высокий',
+};
+
+const marketingGoals: MarketingGoal[] = [
+  {
+    id: 'goal-audience-interviews',
+    pillar: 'audience',
+    title: 'Провести 20 осмысленных интервью',
+    description: 'Достаточная база фактов, чтобы перестать строить позиционирование на догадках.',
+    metric: 'interviewedUsers',
+    target: 20,
+    unit: 'интервью',
+    horizon: '90 дней',
+    priority: 'critical',
+    plan: [
+      'Добавить базовые вопросы для всех сегментов.',
+      'Каждую неделю закрывать минимум 5 интервью.',
+      'После разговора сразу заполнять ответы в карточке лида.',
+      'Раз в неделю выделять повторяющиеся боли и возражения.',
+    ],
+  },
+  {
+    id: 'goal-question-coverage',
+    pillar: 'audience',
+    title: 'Довести заполненность интервью до 80%',
+    description: 'Маркетинг, контент и продажи должны опираться на заполненные ответы, а не на заметки вразнобой.',
+    metric: 'questionCoverage',
+    target: 80,
+    unit: '%',
+    horizon: '90 дней',
+    priority: 'critical',
+    plan: [
+      'Сделать обязательными вопросы про боль, текущий процесс, готовность и условия.',
+      'Фильтровать лидов “Без интервью” и закрывать пробелы каждый день.',
+      'Не переводить лидов в поздние этапы без заполненной анкеты.',
+    ],
+  },
+  {
+    id: 'goal-active-pipeline',
+    pillar: 'sales',
+    title: 'Собрать 50 активных лидов в воронке',
+    description: 'Нужен достаточный объем базы, чтобы видеть закономерности по сегментам, городам и условиям.',
+    metric: 'activeLeads',
+    target: 50,
+    unit: 'лидов',
+    horizon: '90 дней',
+    priority: 'high',
+    plan: [
+      'Каждый день добавлять новые компании из целевых сегментов.',
+      'Фиксировать источник, город, отрасль и следующий шаг.',
+      'Разделять пользователей карты и CRM, чтобы не смешивать офферы.',
+    ],
+  },
+  {
+    id: 'goal-follow-up-discipline',
+    pillar: 'sales',
+    title: 'У 90% активных лидов должен быть следующий контакт',
+    description: 'Продажи не должны зависеть от памяти: у каждого активного лида должен быть понятный next step.',
+    metric: 'contactPlanCoverage',
+    target: 90,
+    unit: '%',
+    horizon: '30 дней',
+    priority: 'critical',
+    plan: [
+      'Каждой новой карточке ставить дату следующего контакта.',
+      'Каждое утро закрывать очередь “Сегодня” и просрочку.',
+      'Использовать быстрые переносы +1/+3/+7/+14 дней вместо пустых дат.',
+    ],
+  },
+  {
+    id: 'goal-hot-leads',
+    pillar: 'offer',
+    title: 'Получить 15 горячих лидов',
+    description: 'Оффер считается живым, когда появляются лиды с высоким score и явным следующим шагом.',
+    metric: 'hotLeads',
+    target: 15,
+    unit: 'лидов',
+    horizon: '90 дней',
+    priority: 'high',
+    plan: [
+      'Проверить 3 варианта оффера: бесплатно, скидка, партнерские условия.',
+      'Поднимать приоритет лидам с явной болью и быстрым сроком запуска.',
+      'Сравнивать score по условиям и сегментам каждую неделю.',
+    ],
+  },
+  {
+    id: 'goal-conversion',
+    pillar: 'sales',
+    title: 'Дойти до 20% подключений от активной базы',
+    description: 'Цель связывает оффер, упаковку и продажи с реальным результатом, а не только с количеством разговоров.',
+    metric: 'conversionRate',
+    target: 20,
+    unit: '%',
+    horizon: '90 дней',
+    priority: 'high',
+    plan: [
+      'Выделить причины отказов и пауз после каждого контакта.',
+      'Усилить оффер для сегментов, где есть интерес, но нет подключения.',
+      'Доводить согласованных клиентов до этапа подключения без разрыва в follow-up.',
+    ],
+  },
+  {
+    id: 'goal-source-hygiene',
+    pillar: 'analytics',
+    title: 'Заполнить источники у 90% лидов',
+    description: 'Без источников невозможно считать каналы, рекламу, контент и реальную стоимость привлечения.',
+    metric: 'sourceCoverage',
+    target: 90,
+    unit: '%',
+    horizon: '30 дней',
+    priority: 'critical',
+    plan: [
+      'Заполнять источник при создании каждой карточки.',
+      'Раз в неделю исправлять старые записи без source.',
+      'Использовать единые названия каналов: Telegram, Instagram, рекомендации, поиск, реклама.',
+    ],
+  },
+  {
+    id: 'goal-growth-readiness',
+    pillar: 'analytics',
+    title: 'Поднять готовность Growth OS до 80%',
+    description: 'Это интегральная цель: система должна быть готова по исследованиям, офферу, продажам, аналитике и доверию.',
+    metric: 'marketingReadiness',
+    target: 80,
+    unit: '%',
+    horizon: '90 дней',
+    priority: 'critical',
+    plan: [
+      'Закрывать сначала блокеры, от которых зависят другие направления.',
+      'Переводить задачи Growth OS из “План” в “В работе” только с понятным результатом.',
+      'Не запускать рекламу масштабно, пока оффер, контент и аналитика ниже 50%.',
+    ],
+  },
+  {
+    id: 'goal-reputation-cases',
+    pillar: 'reputation',
+    title: 'Получить 5 кандидатов на кейсы и отзывы',
+    description: 'Репутация начинается не после большого запуска, а после первых подключенных клиентов.',
+    metric: 'caseCandidates',
+    target: 5,
+    unit: 'клиентов',
+    horizon: '90 дней',
+    priority: 'medium',
+    plan: [
+      'После подключения фиксировать, можно ли сделать публичный кейс.',
+      'Просить короткий отзыв после первой успешной пользы.',
+      'Выделять истории по сегментам: карта, CRM, разные отрасли.',
+    ],
+  },
+  {
+    id: 'goal-brand-content',
+    pillar: 'brand',
+    title: 'Довести бренд и контент до 70% готовности',
+    description: 'Контент и бренд должны говорить одним языком: боли, оффер, доказательства и тон коммуникации.',
+    metric: 'contentBrandReadiness',
+    target: 70,
+    unit: '%',
+    horizon: '90 дней',
+    priority: 'medium',
+    plan: [
+      'Собрать message house из позиционирования, оффера и повторяющихся болей.',
+      'Сделать контент-матрицу: боли, кейсы, возражения, сравнения, запуск.',
+      'Сверить tone of voice во всех каналах и материалах.',
+    ],
+  },
+];
+
+const goalPriorityLabel: Record<MarketingGoalPriority, string> = {
+  critical: 'Критично',
+  high: 'Высокий',
+  medium: 'Средний',
 };
 
 const emptyInput: EarlyUserInput = {
@@ -555,7 +749,7 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
   const [questionModalOpen, setQuestionModalOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState<string | null>(initialError);
-  const [viewMode, setViewMode] = useState<ViewMode>('table');
+  const [viewMode, setViewMode] = useState<ViewMode>('growth');
   const [sortMode, setSortMode] = useState<SortMode>('score');
   const [focusPreset, setFocusPreset] = useState<FocusPreset>('all');
   const [userRoleTab, setUserRoleTab] = useState<'all' | UserRole>('all');
@@ -1622,7 +1816,51 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
     ?? marketingWorkItems.find((item) => item.status !== 'done')
     ?? null;
   const marketingWorkDone = marketingWorkItems.filter((item) => item.status === 'done').length;
-  const marketingWorkInProgress = marketingWorkItems.filter((item) => item.status === 'doing').length;
+  const growthGoalFacts = useMemo(() => {
+    const activeUserCount = users.filter((user) => !user.is_archived && !['Отказ', 'Архив'].includes(user.stage)).length;
+    const usersWithAnyAnswer = new Set(
+      answers
+        .filter((answer) => answer.answer_text?.trim())
+        .map((answer) => answer.early_user_id),
+    ).size;
+    const usersWithSource = users.filter((user) => user.source?.trim()).length;
+    const usersWithContactDate = users.filter((user) => user.next_contact_date && !user.is_archived && !['Отказ', 'Архив'].includes(user.stage)).length;
+    const connectedOrActive = users.filter((user) => ['Подключён', 'Активно пользуется'].includes(user.stage)).length;
+    const contentScore = marketingPillarStats.find((pillar) => pillar.key === 'content')?.score ?? 0;
+    const brandScore = marketingPillarStats.find((pillar) => pillar.key === 'brand')?.score ?? 0;
+
+    return {
+      interviewedUsers: usersWithAnyAnswer,
+      questionCoverage,
+      activeLeads: activeUserCount,
+      contactPlanCoverage: percent(usersWithContactDate, activeUserCount),
+      hotLeads: hotLeadCount,
+      conversionRate,
+      sourceCoverage: percent(usersWithSource, users.length),
+      marketingReadiness,
+      caseCandidates: connectedOrActive,
+      contentBrandReadiness: Math.round((contentScore + brandScore) / 2),
+    } satisfies Record<MarketingGoalMetric, number>;
+  }, [users, answers, questionCoverage, hotLeadCount, conversionRate, marketingReadiness, marketingPillarStats]);
+  const computedMarketingGoals = useMemo(() => marketingGoals.map((goal) => {
+    const current = growthGoalFacts[goal.metric];
+    const progress = goal.target > 0 ? clampScore((current / goal.target) * 100) : 0;
+    return {
+      ...goal,
+      current,
+      progress,
+      gap: Math.max(0, goal.target - current),
+    };
+  }), [growthGoalFacts]);
+  const sortedMarketingGoals = useMemo(() => [...computedMarketingGoals].sort((a, b) => {
+    const priorityWeightByGoal: Record<MarketingGoalPriority, number> = { critical: 0, high: 1, medium: 2 };
+    return a.progress - b.progress || priorityWeightByGoal[a.priority] - priorityWeightByGoal[b.priority];
+  }), [computedMarketingGoals]);
+  const achievedMarketingGoals = computedMarketingGoals.filter((goal) => goal.progress >= 100).length;
+  const averageGoalProgress = computedMarketingGoals.length > 0
+    ? Math.round(computedMarketingGoals.reduce((sum, goal) => sum + goal.progress, 0) / computedMarketingGoals.length)
+    : 0;
+  const immediateGoalPlan = sortedMarketingGoals.filter((goal) => goal.progress < 100).slice(0, 3);
   const selectedAnswerCount = selected ? getAnswerCount(selected.id, selected.profile_role) : 0;
   const selectedTotalQuestions = selected ? getTotalQuestionsForRole(selected.profile_role) : 0;
   const selectedAnswerProgress = selectedTotalQuestions > 0 ? Math.round((selectedAnswerCount / selectedTotalQuestions) * 100) : 0;
@@ -1638,6 +1876,19 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
       `Общая готовность: ${marketingReadiness}%`,
       `Лидов в базе: ${users.length}`,
       `Заполненность интервью: ${questionCoverage}%`,
+      '',
+      '## Цели',
+      '',
+      ...sortedMarketingGoals.flatMap((goal) => [
+        `### ${goal.title} — ${goal.progress}%`,
+        `Направление: ${pillarByKey[goal.pillar].label}`,
+        `Факт: ${goal.current}${goal.unit === '%' ? '%' : ` ${goal.unit}`}`,
+        `План: ${goal.target}${goal.unit === '%' ? '%' : ` ${goal.unit}`}`,
+        `Горизонт: ${goal.horizon}`,
+        'План достижения:',
+        ...goal.plan.map((step) => `- ${step}`),
+        '',
+      ]),
       '',
       '## Направления',
       '',
@@ -1730,10 +1981,10 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
           {viewMode === 'growth' ? (
             <>
               <MetricCard label="Готовность Growth OS" value={`${marketingReadiness}%`} icon="OS" />
-              <MetricCard label="Направлений" value={`${marketingPillarStats.filter((item) => item.score >= 70).length}/${marketingPillarStats.length}`} icon="MP" />
+              <MetricCard label="Прогресс целей" value={`${averageGoalProgress}%`} icon="GL" />
+              <MetricCard label="Целей достигнуто" value={`${achievedMarketingGoals}/${computedMarketingGoals.length}`} icon="OK" />
               <MetricCard label="Задачи" value={`${marketingWorkDone}/${marketingWorkItems.length}`} icon="WK" />
-              <MetricCard label="В работе" value={marketingWorkInProgress} icon="DO" />
-              <MetricCard label="Блокеры" value={criticalMarketingGaps.length} icon="BL" tone="warning" />
+              <MetricCard label="Блокеры" value={criticalMarketingGaps.length} icon="BL" tone={criticalMarketingGaps.length > 0 ? 'warning' : undefined} />
               <MetricCard label="Интервью" value={`${questionCoverage}%`} icon="QA" />
             </>
           ) : (
@@ -1925,6 +2176,65 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
 
         {viewMode === 'growth' && activePillarStat && (
           <section className="growth-workspace">
+            <section className="content-card growth-goals">
+              <div className="card-heading">
+                <div>
+                  <h2>Цели и план достижения</h2>
+                  <p>Цели выставлены автоматически на основе текущей стадии проекта. Прогресс считается из CRM, интервью и Growth OS.</p>
+                </div>
+                <div className={`readiness-badge ${scoreClass(averageGoalProgress)}`}>
+                  <span>Цели</span>
+                  <strong>{averageGoalProgress}%</strong>
+                </div>
+              </div>
+
+              <div className="goal-grid">
+                {sortedMarketingGoals.map((goal) => (
+                  <article className="goal-card" key={goal.id}>
+                    <div className="goal-head">
+                      <div>
+                        <span>{pillarByKey[goal.pillar].label} · {goalPriorityLabel[goal.priority]}</span>
+                        <h3>{goal.title}</h3>
+                      </div>
+                      <b className={`score-pill ${scoreClass(goal.progress)}`}>{goal.progress}%</b>
+                    </div>
+                    <p>{goal.description}</p>
+                    <div className="goal-values">
+                      <strong>{goal.current}{goal.unit === '%' ? '%' : ''}</strong>
+                      <span>из {goal.target}{goal.unit === '%' ? '%' : ` ${goal.unit}`} · {goal.horizon}</span>
+                    </div>
+                    <div className="progress-line"><span style={{ width: `${goal.progress}%` }} /></div>
+                    <div className="goal-plan">
+                      <strong>{goal.gap > 0 ? `Осталось: ${Math.ceil(goal.gap)}${goal.unit === '%' ? '%' : ` ${goal.unit}`}` : 'Цель достигнута'}</strong>
+                      {goal.plan.slice(0, 3).map((step) => <span key={step}>{step}</span>)}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+
+            <section className="content-card goal-next-steps">
+              <div className="card-heading">
+                <div>
+                  <h2>Что делать первым</h2>
+                  <p>План отсортирован по разрыву до цели и критичности для системы.</p>
+                </div>
+              </div>
+              <div className="next-step-list">
+                {immediateGoalPlan.map((goal, index) => (
+                  <article key={goal.id}>
+                    <span>{index + 1}</span>
+                    <div>
+                      <strong>{goal.title}</strong>
+                      <p>{goal.plan[0]}</p>
+                      <small>{pillarByKey[goal.pillar].label} · сейчас {goal.current}{goal.unit === '%' ? '%' : ` ${goal.unit}`} из {goal.target}{goal.unit === '%' ? '%' : ` ${goal.unit}`}</small>
+                    </div>
+                  </article>
+                ))}
+                {immediateGoalPlan.length === 0 && <span className="muted">Все цели достигнуты. Можно ставить следующий цикл.</span>}
+              </div>
+            </section>
+
             <section className="content-card growth-map">
               <div className="card-heading">
                 <div>
