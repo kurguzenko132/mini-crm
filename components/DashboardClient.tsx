@@ -28,9 +28,43 @@ type Props = {
   initialError: string | null;
 };
 
-type ViewMode = 'table' | 'stages' | 'analytics' | 'questions';
+type ViewMode = 'growth' | 'table' | 'stages' | 'analytics' | 'questions';
 type SortMode = 'score' | 'due' | 'updated' | 'name';
 type FocusPreset = 'all' | 'urgent' | 'hot' | 'needsInterview' | 'connected';
+type MarketingPillarKey =
+  | 'audience'
+  | 'competitors'
+  | 'packaging'
+  | 'positioning'
+  | 'offer'
+  | 'content'
+  | 'ads'
+  | 'sales'
+  | 'analytics'
+  | 'retention'
+  | 'reputation'
+  | 'brand';
+type MarketingWorkStatus = 'todo' | 'doing' | 'done';
+type MarketingWorkPriority = 'low' | 'medium' | 'high';
+type MarketingWorkItem = {
+  id: string;
+  pillar: MarketingPillarKey;
+  title: string;
+  status: MarketingWorkStatus;
+  priority: MarketingWorkPriority;
+  dueDate: string;
+};
+type MarketingPillar = {
+  key: MarketingPillarKey;
+  label: string;
+  phase: string;
+  description: string;
+  output: string;
+  metrics: string[];
+  questions: string[];
+  dependsOn: MarketingPillarKey[];
+  next: MarketingPillarKey[];
+};
 type SavedView = {
   id: string;
   name: string;
@@ -47,6 +81,7 @@ type ContactQueueItem = {
 };
 
 const viewModeLabel: Record<ViewMode, string> = {
+  growth: 'Growth OS',
   table: 'Пользователи',
   stages: 'Воронка',
   analytics: 'Аналитика',
@@ -54,6 +89,7 @@ const viewModeLabel: Record<ViewMode, string> = {
 };
 
 const viewModeDescription: Record<ViewMode, string> = {
+  growth: 'Связанная система маркетинга: от аудитории и бренда до продаж, аналитики и удержания',
   table: 'Отслеживание первых клиентов перед запуском компании',
   stages: 'Доска этапов по всей маркетинговой воронке',
   analytics: 'Метрики по каналам, сегментам и качеству интервью',
@@ -61,6 +97,7 @@ const viewModeDescription: Record<ViewMode, string> = {
 };
 
 const navigationItems: Array<{ mode: ViewMode; label: string; icon: string }> = [
+  { mode: 'growth', label: 'Growth OS', icon: '00' },
   { mode: 'table', label: 'Пользователи', icon: '01' },
   { mode: 'questions', label: 'Интервью', icon: '02' },
   { mode: 'stages', label: 'Воронка', icon: '03' },
@@ -91,6 +128,178 @@ const baseFilters: Filters = {
   stage: '',
   priority: '',
   onlyToday: false,
+};
+
+const marketingPillars: MarketingPillar[] = [
+  {
+    key: 'audience',
+    label: 'Изучение аудитории',
+    phase: 'Исследование',
+    description: 'Сегменты, роли покупателей, боли, Jobs To Be Done, критерии выбора и реальные формулировки клиентов.',
+    output: 'ICP, сегменты, карта болей, список гипотез и интервью.',
+    metrics: ['Количество интервью', 'Доля заполненных анкет', 'Повторяемость болей'],
+    questions: ['Кто покупает и кто влияет?', 'Какая боль повторяется чаще всего?', 'Почему решение нужно сейчас?'],
+    dependsOn: [],
+    next: ['positioning', 'offer', 'content'],
+  },
+  {
+    key: 'competitors',
+    label: 'Анализ конкурентов',
+    phase: 'Исследование',
+    description: 'Прямые и косвенные альтернативы, цены, обещания, каналы, слабые места и причины переключения.',
+    output: 'Матрица конкурентов, отличия, антиофферы и аргументы продаж.',
+    metrics: ['Заполненные конкуренты', 'Найденные отличия', 'Проверенные возражения'],
+    questions: ['С чем нас сравнивают?', 'Где конкуренты сильнее?', 'Что мы делаем проще или выгоднее?'],
+    dependsOn: ['audience'],
+    next: ['positioning', 'packaging'],
+  },
+  {
+    key: 'packaging',
+    label: 'Упаковка продукта',
+    phase: 'Стратегия',
+    description: 'Название модулей, тарифы, лендинг, демо, кейсы, визуальная подача и понятная структура ценности.',
+    output: 'Лендинг/презентация, тарифы, демо-сценарий, proof-блоки.',
+    metrics: ['Готовые материалы', 'Конверсия демо', 'Понятность первого экрана'],
+    questions: ['Что человек понимает за 10 секунд?', 'Какие доказательства доверия есть?', 'Какая версия продукта продается первой?'],
+    dependsOn: ['audience', 'competitors', 'positioning'],
+    next: ['offer', 'content', 'ads'],
+  },
+  {
+    key: 'positioning',
+    label: 'Позиционирование',
+    phase: 'Стратегия',
+    description: 'Категория, главный контекст покупки, кому продукт подходит, кому не подходит и чем отличается.',
+    output: 'Позиционирование, narrative, тезисы против конкурентов.',
+    metrics: ['Ясность сегмента', 'Ясность отличия', 'Скорость объяснения'],
+    questions: ['Для кого мы номер один?', 'Какую категорию занимаем?', 'Как одним предложением объяснить отличие?'],
+    dependsOn: ['audience', 'competitors'],
+    next: ['offer', 'brand', 'sales'],
+  },
+  {
+    key: 'offer',
+    label: 'Создание оффера',
+    phase: 'Go-to-market',
+    description: 'Конкретное обещание, условия входа, риск-реверс, дедлайн, бонусы и следующий шаг.',
+    output: 'Оффер пилота, условия, CTA, скрипт объяснения ценности.',
+    metrics: ['Acceptance rate', 'Количество горячих лидов', 'Доля отказов по цене'],
+    questions: ['Что получает клиент и когда?', 'Почему предложение выгодно сейчас?', 'Как снимаем риск?'],
+    dependsOn: ['audience', 'positioning', 'packaging'],
+    next: ['ads', 'sales', 'content'],
+  },
+  {
+    key: 'content',
+    label: 'Контент',
+    phase: 'Go-to-market',
+    description: 'Темы, форматы, контент-матрица, доказательства, кейсы, экспертность и прогрев спроса.',
+    output: 'Контент-план, рубрики, библиотека сообщений и proof-посты.',
+    metrics: ['Публикации', 'Вовлеченность', 'Лиды из контента'],
+    questions: ['Какие боли объясняем?', 'Какие кейсы показываем?', 'Что ведет к заявке?'],
+    dependsOn: ['audience', 'positioning', 'offer'],
+    next: ['ads', 'reputation', 'brand'],
+  },
+  {
+    key: 'ads',
+    label: 'Реклама',
+    phase: 'Go-to-market',
+    description: 'Каналы, гипотезы, креативы, аудитории, бюджеты, UTM и связь с CRM.',
+    output: 'Медиаплан, креативы, гипотезы, правила тестов и бюджет.',
+    metrics: ['CPL', 'CAC', 'Конверсия в разговор', 'ROMI'],
+    questions: ['Кого таргетируем?', 'Какая гипотеза тестируется?', 'Куда попадает лид после клика?'],
+    dependsOn: ['offer', 'content', 'analytics'],
+    next: ['sales', 'analytics'],
+  },
+  {
+    key: 'sales',
+    label: 'Продажи',
+    phase: 'Доход',
+    description: 'Воронка, квалификация, скрипты, обработка возражений, следующий шаг и дисциплина касаний.',
+    output: 'Pipeline, скрипт, причины отказа, правила follow-up.',
+    metrics: ['Конверсия этапов', 'Скорость ответа', 'Подключенные клиенты'],
+    questions: ['Какой следующий шаг у каждого лида?', 'Где теряются сделки?', 'Какие возражения повторяются?'],
+    dependsOn: ['offer', 'positioning', 'ads'],
+    next: ['retention', 'analytics', 'reputation'],
+  },
+  {
+    key: 'analytics',
+    label: 'Аналитика',
+    phase: 'Управление',
+    description: 'Единые метрики, дашборды, источники, конверсии, cohort-view и решения на основе данных.',
+    output: 'North Star, KPI, dashboard, правила еженедельного анализа.',
+    metrics: ['Заполненность источников', 'Конверсия', 'Retention', 'ROMI'],
+    questions: ['Какая метрика главная?', 'Какие решения принимаем каждую неделю?', 'Где нет данных?'],
+    dependsOn: ['audience'],
+    next: ['ads', 'sales', 'retention'],
+  },
+  {
+    key: 'retention',
+    label: 'Удержание клиентов',
+    phase: 'Доход',
+    description: 'Onboarding, активация, причины ухода, повторная ценность, регулярные касания и health score.',
+    output: 'Onboarding-путь, чек-лист активации, причины churn, план повторных касаний.',
+    metrics: ['Activation rate', 'Повторные действия', 'Churn risk', 'NPS'],
+    questions: ['Что считается активацией?', 'Где клиент застревает?', 'Как возвращаем ценность через 7/30 дней?'],
+    dependsOn: ['sales', 'analytics'],
+    next: ['reputation', 'brand'],
+  },
+  {
+    key: 'reputation',
+    label: 'Работа с репутацией',
+    phase: 'Доверие',
+    description: 'Отзывы, публичные кейсы, ответы на негатив, социальное доказательство и мониторинг упоминаний.',
+    output: 'Банк отзывов, кейсы, правила ответа, список площадок.',
+    metrics: ['Отзывы', 'Кейсы', 'Рейтинг', 'Скорость ответа'],
+    questions: ['Где нас обсуждают?', 'Какие отзывы можно запросить?', 'Как отвечаем на негатив?'],
+    dependsOn: ['sales', 'retention', 'content'],
+    next: ['brand', 'content'],
+  },
+  {
+    key: 'brand',
+    label: 'Бренд',
+    phase: 'Доверие',
+    description: 'Смысл, тон общения, визуальная система, обещание бренда и последовательность во всех каналах.',
+    output: 'Brand platform, tone of voice, визуальные правила, message house.',
+    metrics: ['Узнаваемость', 'Consistency score', 'Доверие', 'Brand search'],
+    questions: ['За что бренд должен запомниться?', 'Какой тон нельзя нарушать?', 'Как бренд поддерживает продажи?'],
+    dependsOn: ['positioning', 'content', 'reputation'],
+    next: ['content', 'retention'],
+  },
+];
+
+const pillarByKey = marketingPillars.reduce((acc, pillar) => {
+  acc[pillar.key] = pillar;
+  return acc;
+}, {} as Record<MarketingPillarKey, MarketingPillar>);
+
+const marketingWorkSeed: MarketingWorkItem[] = [
+  { id: 'audience-1', pillar: 'audience', title: 'Собрать 10 интервью по двум сегментам: карта и CRM', status: 'doing', priority: 'high', dueDate: '' },
+  { id: 'audience-2', pillar: 'audience', title: 'Выделить топ-5 болей и критерии покупки из ответов', status: 'todo', priority: 'high', dueDate: '' },
+  { id: 'competitors-1', pillar: 'competitors', title: 'Сравнить 5 прямых и 5 косвенных альтернатив', status: 'todo', priority: 'medium', dueDate: '' },
+  { id: 'competitors-2', pillar: 'competitors', title: 'Выписать слабые места конкурентов для скрипта продаж', status: 'todo', priority: 'medium', dueDate: '' },
+  { id: 'packaging-1', pillar: 'packaging', title: 'Собрать структуру лендинга: боль, решение, доказательства, CTA', status: 'todo', priority: 'high', dueDate: '' },
+  { id: 'packaging-2', pillar: 'packaging', title: 'Описать стартовые условия пилота и тарифную логику', status: 'todo', priority: 'high', dueDate: '' },
+  { id: 'positioning-1', pillar: 'positioning', title: 'Сформулировать позиционирование для карты и CRM отдельно', status: 'todo', priority: 'high', dueDate: '' },
+  { id: 'offer-1', pillar: 'offer', title: 'Подготовить 3 оффера: бесплатно, скидка, партнерские условия', status: 'todo', priority: 'high', dueDate: '' },
+  { id: 'content-1', pillar: 'content', title: 'Собрать контент-матрицу из болей, кейсов и возражений', status: 'todo', priority: 'medium', dueDate: '' },
+  { id: 'ads-1', pillar: 'ads', title: 'Описать рекламные гипотезы и UTM для каждого канала', status: 'todo', priority: 'medium', dueDate: '' },
+  { id: 'sales-1', pillar: 'sales', title: 'Зафиксировать скрипт первого контакта и follow-up правила', status: 'doing', priority: 'high', dueDate: '' },
+  { id: 'analytics-1', pillar: 'analytics', title: 'Назначить еженедельный набор KPI и пороги тревоги', status: 'todo', priority: 'high', dueDate: '' },
+  { id: 'retention-1', pillar: 'retention', title: 'Описать onboarding и критерий активации клиента', status: 'todo', priority: 'medium', dueDate: '' },
+  { id: 'reputation-1', pillar: 'reputation', title: 'Собрать сценарий запроса отзывов и публичных кейсов', status: 'todo', priority: 'medium', dueDate: '' },
+  { id: 'brand-1', pillar: 'brand', title: 'Сформулировать tone of voice и message house бренда', status: 'todo', priority: 'medium', dueDate: '' },
+];
+
+const marketingWorkStorageKey = 'pilotbase_marketing_work_v1';
+
+const workStatusLabel: Record<MarketingWorkStatus, string> = {
+  todo: 'План',
+  doing: 'В работе',
+  done: 'Готово',
+};
+
+const workPriorityLabel: Record<MarketingWorkPriority, string> = {
+  low: 'Низкий',
+  medium: 'Средний',
+  high: 'Высокий',
 };
 
 const emptyInput: EarlyUserInput = {
@@ -319,6 +528,15 @@ function escapeCsv(value: string | number | null | undefined) {
   return text;
 }
 
+function percent(part: number, total: number) {
+  if (total <= 0) return 0;
+  return Math.round((part / total) * 100);
+}
+
+function clampScore(value: number) {
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
+
 export default function DashboardClient({ initialUsers, initialQuestions, initialAnswers, initialError }: Props) {
   const supabase = useMemo(() => createClient(), []);
   const selectionRequestRef = useRef(0);
@@ -357,6 +575,20 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
   });
   const [savedViewName, setSavedViewName] = useState('');
   const [filters, setFilters] = useState<Filters>(baseFilters);
+  const [activePillar, setActivePillar] = useState<MarketingPillarKey>('audience');
+  const [newWorkTitle, setNewWorkTitle] = useState('');
+  const [newWorkPriority, setNewWorkPriority] = useState<MarketingWorkPriority>('medium');
+  const [marketingWorkItems, setMarketingWorkItems] = useState<MarketingWorkItem[]>(() => {
+    if (typeof window === 'undefined') return marketingWorkSeed;
+    try {
+      const raw = window.localStorage.getItem(marketingWorkStorageKey);
+      if (!raw) return marketingWorkSeed;
+      const parsed = JSON.parse(raw) as MarketingWorkItem[];
+      return Array.isArray(parsed) && parsed.length > 0 ? parsed : marketingWorkSeed;
+    } catch {
+      return marketingWorkSeed;
+    }
+  });
 
   const questionsSorted = useMemo(
     () => [...questions].sort((a, b) => a.sort_order - b.sort_order || a.created_at.localeCompare(b.created_at)),
@@ -527,6 +759,10 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
   }, [savedViews]);
 
   useEffect(() => {
+    window.localStorage.setItem(marketingWorkStorageKey, JSON.stringify(marketingWorkItems));
+  }, [marketingWorkItems]);
+
+  useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key !== 'Escape') return;
       if (modalOpen) {
@@ -557,6 +793,39 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
     setUserRoleTab('all');
     setFocusPreset('all');
     setSelectedUserIds([]);
+  }
+
+  function updateMarketingWorkItem(id: string, patch: Partial<MarketingWorkItem>) {
+    setMarketingWorkItems((current) => current.map((item) => (item.id === id ? { ...item, ...patch } : item)));
+  }
+
+  function addMarketingWorkItem() {
+    const title = newWorkTitle.trim();
+    if (!title) {
+      setNotice('Укажи название задачи для Growth OS.');
+      return;
+    }
+
+    const item: MarketingWorkItem = {
+      id: `${activePillar}-${Date.now()}`,
+      pillar: activePillar,
+      title,
+      status: 'todo',
+      priority: newWorkPriority,
+      dueDate: '',
+    };
+    setMarketingWorkItems((current) => [item, ...current]);
+    setNewWorkTitle('');
+    setNotice(`Задача добавлена в блок «${pillarByKey[activePillar].label}».`);
+  }
+
+  function resetMarketingWorkPlan() {
+    const ok = confirm('Вернуть стартовый Growth OS план? Текущие локальные задачи будут заменены.');
+    if (!ok) return;
+    setMarketingWorkItems(marketingWorkSeed);
+    setActivePillar('audience');
+    setNewWorkTitle('');
+    setNotice('Стартовый Growth OS план восстановлен.');
   }
 
   function saveCurrentView() {
@@ -1270,12 +1539,126 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
   const averageLeadScore = filteredUsers.length > 0
     ? Math.round(filteredUsers.reduce((sum, user) => sum + leadScore(user, getAnswerCount(user.id, user.profile_role), getTotalQuestionsForRole(user.profile_role)), 0) / filteredUsers.length)
     : 0;
+  const marketingPillarStats = useMemo(() => {
+    const usersWithSource = users.filter((user) => user.source?.trim()).length;
+    const usersWithContactDate = users.filter((user) => user.next_contact_date).length;
+    const advancedStageCount = users.filter((user) => !['Найден', 'Связались', 'Отказ', 'Архив'].includes(user.stage)).length;
+    const connectedOrActive = users.filter((user) => ['Подключён', 'Активно пользуется'].includes(user.stage)).length;
+    const activeUserCount = users.filter((user) => !user.is_archived && !['Отказ', 'Архив'].includes(user.stage)).length;
+    const sourceCoverage = percent(usersWithSource, users.length);
+    const contactPlanCoverage = percent(usersWithContactDate, activeUserCount);
+    const roleCoverage = new Set(users.map((user) => user.profile_role)).size >= 2 ? 18 : 0;
+    const interviewDepth = clampScore(visibleActiveQuestions.length * 7 + answeredTotal * 2 + questionCoverage * 0.45);
+    const workByPillar = new Map<MarketingPillarKey, MarketingWorkItem[]>();
+    marketingPillars.forEach((pillar) => workByPillar.set(pillar.key, []));
+    marketingWorkItems.forEach((item) => workByPillar.get(item.pillar)?.push(item));
+
+    const signalByPillar: Record<MarketingPillarKey, number> = {
+      audience: clampScore(users.length * 7 + cityStats.length * 6 + industryStats.length * 6 + interviewDepth * 0.45 + roleCoverage),
+      competitors: clampScore(users.length * 4 + termsOptions.length * 4 + interviewDepth * 0.25),
+      packaging: clampScore(termsOptions.length * 7 + metrics.free * 5 + metrics.discounted * 5 + visibleActiveQuestions.length * 3),
+      positioning: clampScore(industryStats.length * 8 + roleCoverage + hotLeadCount * 10 + averageLeadScore * 0.35),
+      offer: clampScore(termsOptions.length * 8 + hotLeadCount * 14 + conversionRate * 0.5 + metrics.discounted * 5),
+      content: clampScore(questionCategories.length * 10 + visibleActiveQuestions.length * 5 + answeredTotal * 2),
+      ads: clampScore(sourceCoverage * 0.8 + usersWithSource * 4 + contactPlanCoverage * 0.2),
+      sales: clampScore(advancedStageCount * 8 + contactPlanCoverage * 0.45 + hotLeadCount * 10 + conversionRate * 0.4),
+      analytics: clampScore(questionCoverage * 0.4 + sourceCoverage * 0.35 + users.length * 4 + visibleActiveQuestions.length * 4),
+      retention: clampScore(connectedOrActive * 18 + metrics.connected * 14 + contactPlanCoverage * 0.25),
+      reputation: clampScore(connectedOrActive * 12 + questionCategories.length * 5 + answeredTotal),
+      brand: clampScore(questionCategories.length * 7 + visibleActiveQuestions.length * 4 + industryStats.length * 6 + roleCoverage),
+    };
+
+    const baseStats = marketingPillars.map((pillar) => {
+      const workItems = workByPillar.get(pillar.key) ?? [];
+      const done = workItems.filter((item) => item.status === 'done').length;
+      const doing = workItems.filter((item) => item.status === 'doing').length;
+      const workScore = workItems.length > 0 ? percent(done + doing * 0.5, workItems.length) : 0;
+      const signalScore = signalByPillar[pillar.key];
+      const score = clampScore(workScore * 0.56 + signalScore * 0.44);
+      return {
+        ...pillar,
+        score,
+        signalScore,
+        workScore,
+        workTotal: workItems.length,
+        workDone: done,
+        workDoing: doing,
+        workTodo: workItems.filter((item) => item.status === 'todo').length,
+      };
+    });
+
+    const scoreByKey = new Map(baseStats.map((item) => [item.key, item.score]));
+    return baseStats.map((item) => ({
+      ...item,
+      blockedBy: item.dependsOn.filter((key) => (scoreByKey.get(key) ?? 0) < 50),
+    }));
+  }, [
+    users,
+    visibleActiveQuestions.length,
+    answeredTotal,
+    questionCoverage,
+    marketingWorkItems,
+    cityStats,
+    industryStats,
+    termsOptions.length,
+    metrics.free,
+    metrics.discounted,
+    metrics.connected,
+    hotLeadCount,
+    averageLeadScore,
+    conversionRate,
+    questionCategories.length,
+  ]);
+  const marketingReadiness = marketingPillarStats.length > 0
+    ? Math.round(marketingPillarStats.reduce((sum, item) => sum + item.score, 0) / marketingPillarStats.length)
+    : 0;
+  const activePillarStat = marketingPillarStats.find((item) => item.key === activePillar) ?? marketingPillarStats[0];
+  const activePillarWorkItems = marketingWorkItems.filter((item) => item.pillar === activePillar);
+  const criticalMarketingGaps = marketingPillarStats
+    .filter((item) => item.score < 50 || item.blockedBy.length > 0)
+    .sort((a, b) => a.score - b.score)
+    .slice(0, 4);
+  const nextMarketingStep = marketingWorkItems.find((item) => item.status !== 'done' && item.priority === 'high')
+    ?? marketingWorkItems.find((item) => item.status !== 'done')
+    ?? null;
+  const marketingWorkDone = marketingWorkItems.filter((item) => item.status === 'done').length;
+  const marketingWorkInProgress = marketingWorkItems.filter((item) => item.status === 'doing').length;
   const selectedAnswerCount = selected ? getAnswerCount(selected.id, selected.profile_role) : 0;
   const selectedTotalQuestions = selected ? getTotalQuestionsForRole(selected.profile_role) : 0;
   const selectedAnswerProgress = selectedTotalQuestions > 0 ? Math.round((selectedAnswerCount / selectedTotalQuestions) * 100) : 0;
   const selectedScore = selected
     ? leadScore(selected, getAnswerCount(selected.id, selected.profile_role), getTotalQuestionsForRole(selected.profile_role))
     : 0;
+
+  function exportMarketingPlan() {
+    const lines = [
+      '# PilotBase Growth OS',
+      '',
+      `Дата: ${localDateStamp()}`,
+      `Общая готовность: ${marketingReadiness}%`,
+      `Лидов в базе: ${users.length}`,
+      `Заполненность интервью: ${questionCoverage}%`,
+      '',
+      '## Направления',
+      '',
+      ...marketingPillarStats.flatMap((pillar) => [
+        `### ${pillar.label} — ${pillar.score}%`,
+        `Фаза: ${pillar.phase}`,
+        `Результат: ${pillar.output}`,
+        `Зависит от: ${pillar.dependsOn.length > 0 ? pillar.dependsOn.map((key) => pillarByKey[key].label).join(', ') : 'нет зависимостей'}`,
+        `Влияет на: ${pillar.next.length > 0 ? pillar.next.map((key) => pillarByKey[key].label).join(', ') : 'финальный блок'}`,
+        `Задачи: ${pillar.workDone}/${pillar.workTotal} готово`,
+        '',
+      ]),
+      '## Открытые задачи',
+      '',
+      ...marketingWorkItems
+        .filter((item) => item.status !== 'done')
+        .map((item) => `- [${workPriorityLabel[item.priority]}] ${pillarByKey[item.pillar].label}: ${item.title} (${workStatusLabel[item.status]})`),
+      '',
+    ];
+    downloadTextFile(`pilotbase-growth-os-${localDateStamp()}.md`, lines.join('\n'), 'text/markdown;charset=utf-8');
+  }
 
   return (
     <div className="app-shell">
@@ -1326,7 +1709,9 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
               <span aria-hidden="true">/</span>
               <input value={filters.search} onChange={(event) => updateFilter('search', event.target.value)} placeholder="Поиск по имени, городу, отрасли, заметкам" />
             </div>
-            {viewMode === 'questions' ? (
+            {viewMode === 'growth' ? (
+              <button className="primary-button" onClick={exportMarketingPlan} type="button"><span aria-hidden="true">↓</span> Экспорт плана</button>
+            ) : viewMode === 'questions' ? (
               <button className="primary-button" onClick={openCreateQuestionModal} type="button"><span aria-hidden="true">+</span> Добавить вопрос</button>
             ) : (
               <button className="primary-button" onClick={openCreateModal} type="button"><span aria-hidden="true">+</span> Добавить пользователя</button>
@@ -1342,15 +1727,28 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
         )}
 
         <section className="metrics-grid">
-          <MetricCard label="Активная база" value={metrics.total} icon="AB" />
-          <MetricCard label="Горячие лиды" value={hotLeadCount} icon="HI" />
-          <MetricCard label="Средний score" value={averageLeadScore} icon="SC" />
-          <MetricCard label="Подключены" value={`${metrics.connected} · ${conversionRate}%`} icon="CV" />
-          <MetricCard label="Срочные контакты" value={metrics.today + metrics.overdue} icon="DQ" tone="warning" />
-          <MetricCard label="Анкета заполнена" value={`${questionCoverage}%`} icon="QA" />
+          {viewMode === 'growth' ? (
+            <>
+              <MetricCard label="Готовность Growth OS" value={`${marketingReadiness}%`} icon="OS" />
+              <MetricCard label="Направлений" value={`${marketingPillarStats.filter((item) => item.score >= 70).length}/${marketingPillarStats.length}`} icon="MP" />
+              <MetricCard label="Задачи" value={`${marketingWorkDone}/${marketingWorkItems.length}`} icon="WK" />
+              <MetricCard label="В работе" value={marketingWorkInProgress} icon="DO" />
+              <MetricCard label="Блокеры" value={criticalMarketingGaps.length} icon="BL" tone="warning" />
+              <MetricCard label="Интервью" value={`${questionCoverage}%`} icon="QA" />
+            </>
+          ) : (
+            <>
+              <MetricCard label="Активная база" value={metrics.total} icon="AB" />
+              <MetricCard label="Горячие лиды" value={hotLeadCount} icon="HI" />
+              <MetricCard label="Средний score" value={averageLeadScore} icon="SC" />
+              <MetricCard label="Подключены" value={`${metrics.connected} · ${conversionRate}%`} icon="CV" />
+              <MetricCard label="Срочные контакты" value={metrics.today + metrics.overdue} icon="DQ" tone="warning" />
+              <MetricCard label="Анкета заполнена" value={`${questionCoverage}%`} icon="QA" />
+            </>
+          )}
         </section>
 
-        {viewMode !== 'questions' && (
+        {viewMode !== 'questions' && viewMode !== 'growth' && (
           <section className="ops-grid">
             <section className="filters-card">
               <div className="panel-heading compact">
@@ -1474,7 +1872,7 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
             ))}
           </div>
           <div className="toolbar-actions">
-            {viewMode !== 'questions' && (
+            {viewMode !== 'questions' && viewMode !== 'growth' && (
               <label className="sort-control">
                 <span>Сортировка</span>
                 <select value={sortMode} onChange={(event) => setSortMode(event.target.value as SortMode)}>
@@ -1482,39 +1880,252 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
                 </select>
               </label>
             )}
-            <div className="export-actions">
-              <button className="secondary-button" onClick={exportCsv} type="button"><span aria-hidden="true">↓</span> CSV</button>
-              <button className="secondary-button" onClick={exportAnswersCsv} type="button"><span aria-hidden="true">↓</span> Ответы</button>
-              <button className="secondary-button" onClick={exportJson} type="button"><span aria-hidden="true">↓</span> JSON</button>
-              <button className="secondary-button" onClick={exportStatsPng} type="button"><span aria-hidden="true">▣</span> PNG</button>
-              <button className="secondary-button" disabled={loading} onClick={sendTelegramReminders} type="button"><span aria-hidden="true">↗</span> Telegram</button>
-              <button className="secondary-button" disabled={loading} onClick={handleLoadDemo} type="button"><span aria-hidden="true">+</span> Демо</button>
-            </div>
+            {viewMode === 'growth' ? (
+              <div className="export-actions">
+                <button className="secondary-button" onClick={exportMarketingPlan} type="button"><span aria-hidden="true">↓</span> Markdown</button>
+                <button className="secondary-button" onClick={resetMarketingWorkPlan} type="button"><span aria-hidden="true">↻</span> Шаблон</button>
+              </div>
+            ) : (
+              <div className="export-actions">
+                <button className="secondary-button" onClick={exportCsv} type="button"><span aria-hidden="true">↓</span> CSV</button>
+                <button className="secondary-button" onClick={exportAnswersCsv} type="button"><span aria-hidden="true">↓</span> Ответы</button>
+                <button className="secondary-button" onClick={exportJson} type="button"><span aria-hidden="true">↓</span> JSON</button>
+                <button className="secondary-button" onClick={exportStatsPng} type="button"><span aria-hidden="true">▣</span> PNG</button>
+                <button className="secondary-button" disabled={loading} onClick={sendTelegramReminders} type="button"><span aria-hidden="true">↗</span> Telegram</button>
+                <button className="secondary-button" disabled={loading} onClick={handleLoadDemo} type="button"><span aria-hidden="true">+</span> Демо</button>
+              </div>
+            )}
           </div>
         </div>
 
-        <section className="saved-views-bar">
-          <div className="saved-views-create">
-            <input
-              value={savedViewName}
-              onChange={(event) => setSavedViewName(event.target.value)}
-              placeholder="Название фильтра (например: Карта / Срочные)"
-            />
-            <button className="secondary-button" onClick={saveCurrentView} type="button">Сохранить фильтр</button>
-          </div>
-          <div className="saved-views-list">
-            {savedViews.length === 0 ? (
-              <span className="muted">Сохранённых фильтров пока нет.</span>
-            ) : (
-              savedViews.map((view) => (
-                <div className="saved-view-item" key={view.id}>
-                  <button className="saved-view-apply" onClick={() => applySavedView(view)} type="button">{view.name}</button>
-                  <button className="saved-view-remove" onClick={() => removeSavedView(view.id)} type="button" title="Удалить фильтр">×</button>
+        {viewMode !== 'growth' && (
+          <section className="saved-views-bar">
+            <div className="saved-views-create">
+              <input
+                value={savedViewName}
+                onChange={(event) => setSavedViewName(event.target.value)}
+                placeholder="Название фильтра (например: Карта / Срочные)"
+              />
+              <button className="secondary-button" onClick={saveCurrentView} type="button">Сохранить фильтр</button>
+            </div>
+            <div className="saved-views-list">
+              {savedViews.length === 0 ? (
+                <span className="muted">Сохранённых фильтров пока нет.</span>
+              ) : (
+                savedViews.map((view) => (
+                  <div className="saved-view-item" key={view.id}>
+                    <button className="saved-view-apply" onClick={() => applySavedView(view)} type="button">{view.name}</button>
+                    <button className="saved-view-remove" onClick={() => removeSavedView(view.id)} type="button" title="Удалить фильтр">×</button>
+                  </div>
+                ))
+              )}
+            </div>
+          </section>
+        )}
+
+        {viewMode === 'growth' && activePillarStat && (
+          <section className="growth-workspace">
+            <section className="content-card growth-map">
+              <div className="card-heading">
+                <div>
+                  <h2>Карта маркетинговой системы</h2>
+                  <p>Каждый блок связан с предыдущими решениями и влияет на следующие этапы роста.</p>
                 </div>
-              ))
-            )}
-          </div>
-        </section>
+                <div className={`readiness-badge ${scoreClass(marketingReadiness)}`}>
+                  <span>Готовность</span>
+                  <strong>{marketingReadiness}%</strong>
+                </div>
+              </div>
+
+              <div className="growth-flow">
+                {Array.from(new Set(marketingPillars.map((pillar) => pillar.phase))).map((phase) => {
+                  const phaseItems = marketingPillarStats.filter((pillar) => pillar.phase === phase);
+                  const phaseScore = phaseItems.length > 0
+                    ? Math.round(phaseItems.reduce((sum, item) => sum + item.score, 0) / phaseItems.length)
+                    : 0;
+                  return (
+                    <article className="growth-phase" key={phase}>
+                      <div>
+                        <span>{phase}</span>
+                        <strong>{phaseScore}%</strong>
+                      </div>
+                      <div className="progress-line"><span style={{ width: `${phaseScore}%` }} /></div>
+                    </article>
+                  );
+                })}
+              </div>
+
+              <div className="pillar-grid">
+                {marketingPillarStats.map((pillar) => (
+                  <button
+                    className={activePillar === pillar.key ? 'pillar-card active' : 'pillar-card'}
+                    key={pillar.key}
+                    onClick={() => setActivePillar(pillar.key)}
+                    type="button"
+                  >
+                    <span>{pillar.phase}</span>
+                    <strong>{pillar.label}</strong>
+                    <small>{pillar.output}</small>
+                    <div className="pillar-card-foot">
+                      <b className={`score-pill ${scoreClass(pillar.score)}`}>{pillar.score}%</b>
+                      {pillar.blockedBy.length > 0 && <em>Блокер</em>}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </section>
+
+            <section className="content-card growth-detail">
+              <div className="card-heading">
+                <div>
+                  <h2>{activePillarStat.label}</h2>
+                  <p>{activePillarStat.description}</p>
+                </div>
+                <div className={`growth-score ${scoreClass(activePillarStat.score)}`}>
+                  <strong>{activePillarStat.score}%</strong>
+                  <span>ready</span>
+                </div>
+              </div>
+
+              <div className="growth-split">
+                <div>
+                  <h3>Результат блока</h3>
+                  <p>{activePillarStat.output}</p>
+                </div>
+                <div>
+                  <h3>Готовность</h3>
+                  <div className="score-breakdown">
+                    <span>Задачи: {activePillarStat.workScore}%</span>
+                    <span>Данные: {activePillarStat.signalScore}%</span>
+                  </div>
+                  <div className="progress-line"><span style={{ width: `${activePillarStat.score}%` }} /></div>
+                </div>
+              </div>
+
+              <div className="dependency-grid">
+                <div>
+                  <h3>Зависит от</h3>
+                  <div className="dependency-list">
+                    {activePillarStat.dependsOn.length === 0 ? <span className="muted">Стартовый блок</span> : activePillarStat.dependsOn.map((key) => (
+                      <button key={key} onClick={() => setActivePillar(key)} type="button">{pillarByKey[key].label}</button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <h3>Влияет на</h3>
+                  <div className="dependency-list">
+                    {activePillarStat.next.map((key) => (
+                      <button key={key} onClick={() => setActivePillar(key)} type="button">{pillarByKey[key].label}</button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {activePillarStat.blockedBy.length > 0 && (
+                <div className="growth-warning">
+                  Сначала усили: {activePillarStat.blockedBy.map((key) => pillarByKey[key].label).join(', ')}.
+                </div>
+              )}
+
+              <div className="growth-lists">
+                <div>
+                  <h3>Контрольные вопросы</h3>
+                  {activePillarStat.questions.map((question) => <span key={question}>{question}</span>)}
+                </div>
+                <div>
+                  <h3>Метрики</h3>
+                  {activePillarStat.metrics.map((metric) => <span key={metric}>{metric}</span>)}
+                </div>
+              </div>
+            </section>
+
+            <section className="content-card growth-backlog">
+              <div className="card-heading">
+                <div>
+                  <h2>Рабочий план</h2>
+                  <p>Задачи выбранного направления. Статусы сохраняются в этом браузере.</p>
+                </div>
+                <span className="tag blue">{activePillarWorkItems.filter((item) => item.status === 'done').length}/{activePillarWorkItems.length}</span>
+              </div>
+
+              <div className="work-add-row">
+                <input
+                  value={newWorkTitle}
+                  onChange={(event) => setNewWorkTitle(event.target.value)}
+                  placeholder={`Новая задача: ${activePillarStat.label.toLowerCase()}`}
+                />
+                <select value={newWorkPriority} onChange={(event) => setNewWorkPriority(event.target.value as MarketingWorkPriority)}>
+                  {(Object.keys(workPriorityLabel) as MarketingWorkPriority[]).map((priority) => (
+                    <option key={priority} value={priority}>{workPriorityLabel[priority]}</option>
+                  ))}
+                </select>
+                <button className="primary-button" onClick={addMarketingWorkItem} type="button">Добавить</button>
+              </div>
+
+              <div className="work-list">
+                {activePillarWorkItems.length === 0 ? (
+                  <span className="muted">Задач в этом блоке пока нет.</span>
+                ) : activePillarWorkItems.map((item) => (
+                  <article className="work-item" key={item.id}>
+                    <div>
+                      <strong>{item.title}</strong>
+                      <span>{workPriorityLabel[item.priority]} приоритет</span>
+                    </div>
+                    <select value={item.status} onChange={(event) => updateMarketingWorkItem(item.id, { status: event.target.value as MarketingWorkStatus })}>
+                      {(Object.keys(workStatusLabel) as MarketingWorkStatus[]).map((status) => (
+                        <option key={status} value={status}>{workStatusLabel[status]}</option>
+                      ))}
+                    </select>
+                    <select value={item.priority} onChange={(event) => updateMarketingWorkItem(item.id, { priority: event.target.value as MarketingWorkPriority })}>
+                      {(Object.keys(workPriorityLabel) as MarketingWorkPriority[]).map((priority) => (
+                        <option key={priority} value={priority}>{workPriorityLabel[priority]}</option>
+                      ))}
+                    </select>
+                    <input type="date" value={item.dueDate} onChange={(event) => updateMarketingWorkItem(item.id, { dueDate: event.target.value })} />
+                  </article>
+                ))}
+              </div>
+            </section>
+
+            <section className="content-card growth-gaps">
+              <div className="card-heading">
+                <div>
+                  <h2>Управленческие сигналы</h2>
+                  <p>Что мешает системе работать как единый маркетинг и продажи контур.</p>
+                </div>
+              </div>
+
+              <div className="signal-grid">
+                <article>
+                  <span>Следующий шаг</span>
+                  <strong>{nextMarketingStep ? nextMarketingStep.title : 'Критичных задач нет'}</strong>
+                  {nextMarketingStep && <small>{pillarByKey[nextMarketingStep.pillar].label}</small>}
+                </article>
+                <article>
+                  <span>Данные аудитории</span>
+                  <strong>{users.length} лидов · {visibleActiveQuestions.length} вопросов</strong>
+                  <small>Заполненность интервью: {questionCoverage}%</small>
+                </article>
+                <article>
+                  <span>Связь с продажами</span>
+                  <strong>{hotLeadCount} горячих · {conversionRate}% подключений</strong>
+                  <small>Следи за follow-up и источниками</small>
+                </article>
+              </div>
+
+              <div className="gap-list">
+                {criticalMarketingGaps.length === 0 ? (
+                  <span className="muted">Критических разрывов нет. Можно усиливать тесты и масштабирование.</span>
+                ) : criticalMarketingGaps.map((gap) => (
+                  <button key={gap.key} onClick={() => setActivePillar(gap.key)} type="button">
+                    <strong>{gap.label}</strong>
+                    <span>{gap.score}% · {gap.blockedBy.length > 0 ? `зависит от ${gap.blockedBy.map((key) => pillarByKey[key].label).join(', ')}` : 'мало готовности'}</span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          </section>
+        )}
 
         {viewMode === 'table' && (
           <section className="content-card table-card">
@@ -1761,7 +2372,7 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
           </section>
         )}
 
-        {viewMode !== 'analytics' && viewMode !== 'questions' && (
+        {viewMode !== 'analytics' && viewMode !== 'questions' && viewMode !== 'growth' && (
           <section id="stats-export-area" className="bottom-grid">
             <StagesSummary stages={stages} />
             <StatsPanel title="По городам" data={cityStats} max={maxCity} />

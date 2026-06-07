@@ -1593,17 +1593,376 @@ tbody tr:hover {
   gap: 8px;
 }
 
+/* Growth OS */
+.growth-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(360px, 0.85fr);
+  gap: 12px;
+}
+
+.growth-map,
+.growth-detail,
+.growth-backlog,
+.growth-gaps {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+}
+
+.growth-map {
+  grid-row: span 2;
+}
+
+.readiness-badge,
+.growth-score {
+  min-width: 94px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius);
+  padding: 10px;
+  text-align: center;
+}
+
+.readiness-badge.green,
+.growth-score.green {
+  background: var(--green-soft);
+  color: var(--green);
+}
+
+.readiness-badge.blue,
+.growth-score.blue {
+  background: var(--blue-soft);
+  color: var(--blue);
+}
+
+.readiness-badge.orange,
+.growth-score.orange {
+  background: var(--amber-soft);
+  color: var(--amber);
+}
+
+.readiness-badge.red,
+.growth-score.red {
+  background: var(--red-soft);
+  color: var(--red);
+}
+
+.readiness-badge span,
+.growth-score span {
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.readiness-badge strong,
+.growth-score strong {
+  color: var(--ink);
+  font-size: 22px;
+  line-height: 1;
+}
+
+.growth-flow {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(130px, 1fr));
+  gap: 8px;
+}
+
+.growth-phase {
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-soft);
+  padding: 10px;
+}
+
+.growth-phase div:first-child {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.growth-phase span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.growth-phase strong {
+  color: var(--ink);
+  font-size: 16px;
+}
+
+.progress-line {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--gray-soft);
+}
+
+.progress-line span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--blue);
+}
+
+.pillar-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.pillar-card {
+  min-height: 158px;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-soft);
+  padding: 12px;
+  color: var(--text);
+  text-align: left;
+}
+
+.pillar-card.active {
+  border-color: #a9c2ff;
+  background: var(--blue-soft);
+  box-shadow: inset 0 0 0 1px #c7d8ff;
+}
+
+.pillar-card > span {
+  color: var(--blue);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.pillar-card strong {
+  color: var(--ink);
+  font-size: 15px;
+}
+
+.pillar-card small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.pillar-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: auto;
+}
+
+.pillar-card-foot em {
+  border-radius: 999px;
+  background: var(--red-soft);
+  color: var(--red);
+  padding: 4px 8px;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.growth-split,
+.dependency-grid,
+.growth-lists,
+.signal-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.growth-split > div,
+.dependency-grid > div,
+.growth-lists > div,
+.signal-grid article {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-soft);
+  padding: 12px;
+}
+
+.growth-split h3,
+.dependency-grid h3,
+.growth-lists h3 {
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+.growth-split p {
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.score-breakdown {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.score-breakdown span,
+.growth-lists span {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #ffffff;
+  color: var(--text);
+  padding: 6px 8px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.dependency-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.dependency-list button {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #ffffff;
+  color: var(--blue);
+  padding: 7px 9px;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.growth-warning {
+  border: 1px solid #f3b3b3;
+  border-radius: var(--radius);
+  background: var(--red-soft);
+  color: var(--red);
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.growth-lists > div {
+  display: flex;
+  align-content: start;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.growth-lists h3 {
+  width: 100%;
+}
+
+.work-add-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 140px auto;
+  gap: 8px;
+}
+
+.work-list {
+  display: grid;
+  gap: 8px;
+}
+
+.work-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 120px 120px 150px;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-soft);
+  padding: 10px;
+}
+
+.work-item strong,
+.work-item span {
+  display: block;
+}
+
+.work-item strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.work-item span {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.signal-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.signal-grid article span,
+.signal-grid article small {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.signal-grid article strong {
+  display: block;
+  margin: 7px 0 5px;
+  color: var(--ink);
+  font-size: 15px;
+  line-height: 1.3;
+}
+
+.gap-list {
+  display: grid;
+  gap: 8px;
+}
+
+.gap-list button {
+  display: grid;
+  gap: 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-soft);
+  padding: 10px;
+  text-align: left;
+}
+
+.gap-list strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.gap-list span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 @media (max-width: 1320px) {
   .metrics-grid {
     grid-template-columns: repeat(3, minmax(160px, 1fr));
   }
 
-  .ops-grid {
+  .ops-grid,
+  .growth-workspace {
     grid-template-columns: 1fr 1fr;
   }
 
-  .filters-card {
+  .filters-card,
+  .growth-map {
     grid-column: 1 / -1;
+  }
+
+  .pillar-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .growth-flow {
+    grid-template-columns: repeat(3, minmax(130px, 1fr));
   }
 }
 
@@ -1674,10 +2033,22 @@ tbody tr:hover {
 
   .metrics-grid,
   .ops-grid,
+  .growth-workspace,
+  .growth-flow,
+  .pillar-grid,
+  .growth-split,
+  .dependency-grid,
+  .growth-lists,
+  .signal-grid,
   .analytics-grid,
   .bottom-grid,
   .question-stats,
   .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .work-add-row,
+  .work-item {
     grid-template-columns: 1fr;
   }
 
