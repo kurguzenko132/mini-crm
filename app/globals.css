@@ -1606,6 +1606,25 @@ tbody tr:hover {
   gap: 12px;
 }
 
+.content-card,
+.metric-card,
+.goal-card,
+.pillar-card,
+.work-item,
+.city-load-row,
+.next-step-list article {
+  min-width: 0;
+}
+
+.content-card *,
+.metric-card *,
+.goal-card *,
+.pillar-card *,
+.work-item *,
+.city-load-row * {
+  min-width: 0;
+}
+
 .growth-map,
 .growth-detail,
 .growth-backlog,
@@ -2007,6 +2026,19 @@ tbody tr:hover {
   text-align: left;
 }
 
+.pillar-card strong,
+.pillar-card small,
+.goal-head h3,
+.goal-card p,
+.work-item strong,
+.work-item span,
+.next-step-list p,
+.next-step-list small,
+.city-load-row strong,
+.city-load-row small {
+  overflow-wrap: anywhere;
+}
+
 .pillar-card.active {
   border-color: #a9c2ff;
   background: var(--blue-soft);
@@ -2040,13 +2072,48 @@ tbody tr:hover {
 }
 
 .pillar-card-foot em {
-  border-radius: 999px;
-  background: var(--red-soft);
-  color: var(--red);
-  padding: 4px 8px;
+  color: var(--muted);
   font-size: 11px;
   font-style: normal;
   font-weight: 900;
+  text-align: right;
+}
+
+.manual-state-pill {
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.manual-state-pill.filled {
+  background: var(--green-soft);
+  color: var(--green);
+}
+
+.manual-state-pill.empty {
+  background: var(--gray-soft);
+  color: var(--muted);
+}
+
+.pillar-note-editor {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.pillar-note-editor label {
+  display: grid;
+  gap: 7px;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.pillar-note-editor label span {
+  color: var(--muted);
+  font-size: 10px;
+  text-transform: uppercase;
 }
 
 .growth-split,
@@ -2222,19 +2289,340 @@ tbody tr:hover {
   line-height: 1.4;
 }
 
+/* Belarus map */
+.geo-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.65fr);
+  gap: 12px;
+}
+
+.belarus-map-card,
+.city-detail-card,
+.city-load-card {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+}
+
+.belarus-map-card {
+  grid-row: span 2;
+}
+
+.map-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.map-toolbar > span {
+  min-width: 48px;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 900;
+  text-align: center;
+}
+
+.belarus-map-shell {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, #f8fbff, #eef7f1);
+}
+
+.belarus-map-stage {
+  position: relative;
+  min-height: 560px;
+  padding: 14px;
+}
+
+.belarus-map-svg {
+  width: 100%;
+  height: 100%;
+  min-height: 530px;
+  display: block;
+}
+
+.belarus-outline {
+  fill: url("#belarusMapFill");
+  stroke: #86a7c8;
+  stroke-width: 1.4;
+  vector-effect: non-scaling-stroke;
+}
+
+.belarus-region-line {
+  fill: none;
+  stroke: rgba(112, 132, 154, 0.35);
+  stroke-dasharray: 2 2;
+  stroke-width: 0.7;
+  vector-effect: non-scaling-stroke;
+}
+
+.belarus-city {
+  cursor: pointer;
+  outline: none;
+}
+
+.city-halo {
+  fill: rgba(37, 99, 235, 0.12);
+  stroke: transparent;
+}
+
+.city-dot {
+  fill: #ffffff;
+  stroke: var(--line-strong);
+  stroke-width: 0.9;
+  vector-effect: non-scaling-stroke;
+}
+
+.belarus-city.load-low .city-dot {
+  fill: var(--blue-soft);
+  stroke: var(--blue);
+}
+
+.belarus-city.load-medium .city-dot {
+  fill: var(--amber-soft);
+  stroke: var(--amber);
+}
+
+.belarus-city.load-high .city-dot {
+  fill: var(--green-soft);
+  stroke: var(--green);
+}
+
+.belarus-city.mark-priority .city-halo {
+  fill: rgba(220, 38, 38, 0.2);
+}
+
+.belarus-city.mark-active .city-halo {
+  fill: rgba(22, 163, 74, 0.22);
+}
+
+.belarus-city.mark-target .city-halo {
+  fill: rgba(37, 99, 235, 0.2);
+}
+
+.belarus-city.mark-watch .city-halo {
+  fill: rgba(217, 119, 6, 0.2);
+}
+
+.belarus-city.selected .city-dot {
+  stroke: var(--ink);
+  stroke-width: 1.8;
+}
+
+.city-label,
+.city-count {
+  pointer-events: none;
+  fill: var(--ink);
+  font-weight: 900;
+}
+
+.city-label {
+  font-size: 3.2px;
+}
+
+.city-count {
+  font-size: 3.2px;
+  text-anchor: middle;
+  dominant-baseline: middle;
+}
+
+.map-pan-controls {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  display: grid;
+  grid-template-columns: repeat(3, 36px);
+  gap: 6px;
+}
+
+.map-pan-controls button:first-child {
+  grid-column: 2;
+}
+
+.map-pan-controls button:nth-child(4) {
+  grid-column: 2;
+}
+
+.city-load-metrics {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.city-load-metrics article {
+  display: grid;
+  gap: 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-soft);
+  padding: 10px;
+}
+
+.city-load-metrics span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.city-load-metrics strong {
+  color: var(--ink);
+  font-size: 22px;
+  line-height: 1;
+}
+
+.city-mark-form {
+  display: grid;
+  gap: 10px;
+}
+
+.city-mark-form label {
+  display: grid;
+  gap: 7px;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.city-mark-form label span {
+  color: var(--muted);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.city-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.city-status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 5px 8px;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.city-status-pill.none {
+  background: var(--gray-soft);
+  color: var(--muted);
+}
+
+.city-status-pill.watch {
+  background: var(--amber-soft);
+  color: var(--amber);
+}
+
+.city-status-pill.target {
+  background: var(--blue-soft);
+  color: var(--blue);
+}
+
+.city-status-pill.active {
+  background: var(--green-soft);
+  color: var(--green);
+}
+
+.city-status-pill.priority {
+  background: var(--red-soft);
+  color: var(--red);
+}
+
+.city-load-list {
+  display: grid;
+  gap: 8px;
+}
+
+.city-load-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 48px auto;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-soft);
+  padding: 10px;
+  text-align: left;
+}
+
+.city-load-row.active {
+  border-color: #a9c2ff;
+  background: var(--blue-soft);
+}
+
+.city-load-row strong,
+.city-load-row small {
+  display: block;
+}
+
+.city-load-row strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.city-load-row small {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.city-load-row b {
+  color: var(--ink);
+  font-size: 18px;
+  text-align: right;
+}
+
+.unknown-city-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+
+.unknown-city-list strong {
+  width: 100%;
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.unknown-city-list span {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #ffffff;
+  padding: 6px 8px;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 800;
+}
+
 @media (max-width: 1320px) {
   .metrics-grid {
     grid-template-columns: repeat(3, minmax(160px, 1fr));
   }
 
   .ops-grid,
-  .growth-workspace {
+  .growth-workspace,
+  .geo-workspace {
     grid-template-columns: 1fr 1fr;
   }
 
   .filters-card,
-  .growth-map {
+  .growth-map,
+  .belarus-map-card {
     grid-column: 1 / -1;
+  }
+
+  .belarus-map-card {
+    grid-row: auto;
   }
 
   .pillar-grid {
@@ -2271,12 +2659,13 @@ tbody tr:hover {
   }
 
   .sidebar-nav {
-    display: flex;
-    overflow-x: auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+    overflow: visible;
   }
 
   .sidebar-nav button {
-    flex: 0 0 auto;
+    min-width: 0;
   }
 
   .sidebar-status {
@@ -2328,10 +2717,13 @@ tbody tr:hover {
   .growth-split,
   .dependency-grid,
   .growth-lists,
+  .pillar-note-editor,
   .signal-grid,
   .next-step-list,
   .goal-form-grid,
   .goal-notes-grid,
+  .geo-workspace,
+  .city-load-metrics,
   .analytics-grid,
   .bottom-grid,
   .question-stats,
@@ -2350,8 +2742,28 @@ tbody tr:hover {
   }
 
   .work-add-row,
-  .work-item {
+  .work-item,
+  .city-load-row {
     grid-template-columns: 1fr;
+  }
+
+  .belarus-map-stage {
+    min-height: 430px;
+    padding: 10px;
+  }
+
+  .belarus-map-svg {
+    min-height: 400px;
+  }
+
+  .map-toolbar,
+  .city-detail-actions {
+    justify-content: stretch;
+  }
+
+  .map-toolbar button,
+  .city-detail-actions button {
+    flex: 1 1 auto;
   }
 
   .focus-presets,

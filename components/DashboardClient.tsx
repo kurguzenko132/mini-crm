@@ -28,7 +28,7 @@ type Props = {
   initialError: string | null;
 };
 
-type ViewMode = 'growth' | 'table' | 'stages' | 'analytics' | 'questions';
+type ViewMode = 'growth' | 'geo' | 'table' | 'stages' | 'analytics' | 'questions';
 type SortMode = 'score' | 'due' | 'updated' | 'name';
 type FocusPreset = 'all' | 'urgent' | 'hot' | 'needsInterview' | 'connected';
 type MarketingPillarKey =
@@ -84,6 +84,27 @@ type MarketingGoal = {
   updatedAt: string;
 };
 type MarketingGoalInput = Omit<MarketingGoal, 'id' | 'createdAt' | 'updatedAt'>;
+type MarketingPillarNote = {
+  pillar: MarketingPillarKey;
+  summary: string;
+  output: string;
+  questionsText: string;
+  metricsText: string;
+  updatedAt: string;
+};
+type CityMapStatus = 'none' | 'watch' | 'target' | 'active' | 'priority';
+type CityMapMark = {
+  city: string;
+  status: CityMapStatus;
+  note: string;
+  updatedAt: string;
+};
+type BelarusCityPoint = {
+  city: string;
+  region: string;
+  x: number;
+  y: number;
+};
 type SavedView = {
   id: string;
   name: string;
@@ -101,6 +122,7 @@ type ContactQueueItem = {
 
 const viewModeLabel: Record<ViewMode, string> = {
   growth: 'План роста',
+  geo: 'Карта РБ',
   table: 'Пользователи',
   stages: 'Воронка',
   analytics: 'Аналитика',
@@ -109,6 +131,7 @@ const viewModeLabel: Record<ViewMode, string> = {
 
 const viewModeDescription: Record<ViewMode, string> = {
   growth: 'Цели, планы, достижения и маркетинговые направления в одном рабочем разделе',
+  geo: 'Интерактивная карта Беларуси: загрузка по городам, zoom и ручные пометки',
   table: 'Отслеживание первых клиентов перед запуском компании',
   stages: 'Доска этапов по всей маркетинговой воронке',
   analytics: 'Метрики по каналам, сегментам и качеству интервью',
@@ -117,10 +140,11 @@ const viewModeDescription: Record<ViewMode, string> = {
 
 const navigationItems: Array<{ mode: ViewMode; label: string; icon: string }> = [
   { mode: 'growth', label: 'План роста', icon: '00' },
-  { mode: 'table', label: 'Пользователи', icon: '01' },
-  { mode: 'questions', label: 'Интервью', icon: '02' },
-  { mode: 'stages', label: 'Воронка', icon: '03' },
-  { mode: 'analytics', label: 'Аналитика', icon: '04' },
+  { mode: 'geo', label: 'Карта РБ', icon: '01' },
+  { mode: 'table', label: 'Пользователи', icon: '02' },
+  { mode: 'questions', label: 'Интервью', icon: '03' },
+  { mode: 'stages', label: 'Воронка', icon: '04' },
+  { mode: 'analytics', label: 'Аналитика', icon: '05' },
 ];
 
 const sortModeLabel: Record<SortMode, string> = {
@@ -292,6 +316,8 @@ const pillarByKey = marketingPillars.reduce((acc, pillar) => {
 const marketingWorkSeed: MarketingWorkItem[] = [];
 const marketingWorkStorageKey = 'pilotbase_marketing_work_v2';
 const marketingGoalsStorageKey = 'pilotbase_marketing_goals_v2';
+const marketingPillarNotesStorageKey = 'pilotbase_marketing_pillar_notes_v1';
+const cityMapMarksStorageKey = 'pilotbase_city_map_marks_v1';
 
 const workStatusLabel: Record<MarketingWorkStatus, string> = {
   todo: 'План',
@@ -317,6 +343,29 @@ const goalStatusLabel: Record<MarketingGoalStatus, string> = {
   done: 'Достигнута',
 };
 
+const cityMapStatusLabel: Record<CityMapStatus, string> = {
+  none: 'Без метки',
+  watch: 'Наблюдать',
+  target: 'Целевой город',
+  active: 'В работе',
+  priority: 'Приоритет',
+};
+
+const cityMapStatusOptions: CityMapStatus[] = ['none', 'watch', 'target', 'active', 'priority'];
+
+const belarusCityPoints: BelarusCityPoint[] = [
+  { city: 'Минск', region: 'Минская область', x: 50, y: 48 },
+  { city: 'Гомель', region: 'Гомельская область', x: 78, y: 78 },
+  { city: 'Брест', region: 'Брестская область', x: 17, y: 77 },
+  { city: 'Гродно', region: 'Гродненская область', x: 18, y: 42 },
+  { city: 'Витебск', region: 'Витебская область', x: 72, y: 22 },
+  { city: 'Могилёв', region: 'Могилёвская область', x: 68, y: 53 },
+  { city: 'Барановичи', region: 'Брестская область', x: 36, y: 61 },
+  { city: 'Бобруйск', region: 'Могилёвская область', x: 59, y: 66 },
+  { city: 'Пинск', region: 'Брестская область', x: 38, y: 85 },
+  { city: 'Орша', region: 'Витебская область', x: 74, y: 39 },
+];
+
 const emptyGoalInput: MarketingGoalInput = {
   pillar: 'audience',
   title: '',
@@ -332,6 +381,8 @@ const emptyGoalInput: MarketingGoalInput = {
 };
 
 const emptyMarketingGoals: MarketingGoal[] = [];
+const emptyMarketingPillarNotes: MarketingPillarNote[] = [];
+const emptyCityMapMarks: CityMapMark[] = [];
 const localStorageUpdateEventPrefix = 'pilotbase-local-storage';
 
 type LocalStateUpdate<T> = T | ((current: T) => T);
@@ -364,6 +415,8 @@ function createStoredArrayReader<T>(key: string, fallback: T[]) {
 
 const readStoredMarketingWorkItems = createStoredArrayReader<MarketingWorkItem>(marketingWorkStorageKey, marketingWorkSeed);
 const readStoredMarketingGoals = createStoredArrayReader<MarketingGoal>(marketingGoalsStorageKey, emptyMarketingGoals);
+const readStoredMarketingPillarNotes = createStoredArrayReader<MarketingPillarNote>(marketingPillarNotesStorageKey, emptyMarketingPillarNotes);
+const readStoredCityMapMarks = createStoredArrayReader<CityMapMark>(cityMapMarksStorageKey, emptyCityMapMarks);
 
 function subscribeStorageKey(key: string, callback: () => void) {
   if (typeof window === 'undefined') return () => undefined;
@@ -689,6 +742,9 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
   const [newWorkPriority, setNewWorkPriority] = useState<MarketingWorkPriority>('medium');
   const [goalForm, setGoalForm] = useState<MarketingGoalInput>(() => ({ ...emptyGoalInput }));
   const [editingGoalId, setEditingGoalId] = useState<string | null>(null);
+  const [selectedBelarusCity, setSelectedBelarusCity] = useState(belarusCityPoints[0].city);
+  const [belarusMapZoom, setBelarusMapZoom] = useState(1);
+  const [belarusMapOffset, setBelarusMapOffset] = useState({ x: 0, y: 0 });
   const marketingGoals = useSyncExternalStore(
     (callback) => subscribeStorageKey(marketingGoalsStorageKey, callback),
     readStoredMarketingGoals,
@@ -699,6 +755,16 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
     readStoredMarketingWorkItems,
     () => marketingWorkSeed,
   );
+  const marketingPillarNotes = useSyncExternalStore(
+    (callback) => subscribeStorageKey(marketingPillarNotesStorageKey, callback),
+    readStoredMarketingPillarNotes,
+    () => emptyMarketingPillarNotes,
+  );
+  const cityMapMarks = useSyncExternalStore(
+    (callback) => subscribeStorageKey(cityMapMarksStorageKey, callback),
+    readStoredCityMapMarks,
+    () => emptyCityMapMarks,
+  );
   const setMarketingGoals = useCallback((update: LocalStateUpdate<MarketingGoal[]>) => {
     const next = resolveLocalStateUpdate(update, readStoredMarketingGoals());
     writeStoredArray(marketingGoalsStorageKey, next);
@@ -706,6 +772,14 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
   const setMarketingWorkItems = useCallback((update: LocalStateUpdate<MarketingWorkItem[]>) => {
     const next = resolveLocalStateUpdate(update, readStoredMarketingWorkItems());
     writeStoredArray(marketingWorkStorageKey, next);
+  }, []);
+  const setMarketingPillarNotes = useCallback((update: LocalStateUpdate<MarketingPillarNote[]>) => {
+    const next = resolveLocalStateUpdate(update, readStoredMarketingPillarNotes());
+    writeStoredArray(marketingPillarNotesStorageKey, next);
+  }, []);
+  const setCityMapMarks = useCallback((update: LocalStateUpdate<CityMapMark[]>) => {
+    const next = resolveLocalStateUpdate(update, readStoredCityMapMarks());
+    writeStoredArray(cityMapMarksStorageKey, next);
   }, []);
 
   const questionsSorted = useMemo(
@@ -909,8 +983,69 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
     setSelectedUserIds([]);
   }
 
+  function openCityUsers(city: string) {
+    setFilters({ ...baseFilters, city });
+    setUserRoleTab('all');
+    setFocusPreset('all');
+    setSelectedUserIds([]);
+    setViewMode('table');
+    setNotice(`Открыта база по городу: ${city}`);
+  }
+
   function updateMarketingWorkItem(id: string, patch: Partial<MarketingWorkItem>) {
     setMarketingWorkItems((current) => current.map((item) => (item.id === id ? { ...item, ...patch } : item)));
+  }
+
+  function updateMarketingPillarNote(pillar: MarketingPillarKey, patch: Partial<Omit<MarketingPillarNote, 'pillar' | 'updatedAt'>>) {
+    setMarketingPillarNotes((current) => {
+      const existing = current.find((item) => item.pillar === pillar);
+      const next: MarketingPillarNote = {
+        pillar,
+        summary: existing?.summary ?? '',
+        output: existing?.output ?? '',
+        questionsText: existing?.questionsText ?? '',
+        metricsText: existing?.metricsText ?? '',
+        updatedAt: new Date().toISOString(),
+        ...patch,
+      };
+      const hasContent = [next.summary, next.output, next.questionsText, next.metricsText].some((value) => value.trim());
+      if (!hasContent) return current.filter((item) => item.pillar !== pillar);
+      if (existing) return current.map((item) => (item.pillar === pillar ? next : item));
+      return [next, ...current];
+    });
+  }
+
+  function updateCityMapMark(city: string, patch: Partial<Omit<CityMapMark, 'city' | 'updatedAt'>>) {
+    setCityMapMarks((current) => {
+      const existing = current.find((item) => item.city === city);
+      const next: CityMapMark = {
+        city,
+        status: existing?.status ?? 'none',
+        note: existing?.note ?? '',
+        updatedAt: new Date().toISOString(),
+        ...patch,
+      };
+      const hasContent = next.status !== 'none' || next.note.trim().length > 0;
+      if (!hasContent) return current.filter((item) => item.city !== city);
+      if (existing) return current.map((item) => (item.city === city ? next : item));
+      return [next, ...current];
+    });
+  }
+
+  function resetBelarusMapView() {
+    setBelarusMapZoom(1);
+    setBelarusMapOffset({ x: 0, y: 0 });
+  }
+
+  function changeBelarusMapZoom(delta: number) {
+    setBelarusMapZoom((current) => Math.max(1, Math.min(2.8, Number((current + delta).toFixed(1)))));
+  }
+
+  function nudgeBelarusMap(dx: number, dy: number) {
+    setBelarusMapOffset((current) => ({
+      x: Math.max(-28, Math.min(28, current.x + dx)),
+      y: Math.max(-24, Math.min(24, current.y + dy)),
+    }));
   }
 
   function updateGoalForm<K extends keyof MarketingGoalInput>(key: K, value: MarketingGoalInput[K]) {
@@ -1026,6 +1161,7 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
     if (!ok) return;
     setMarketingGoals([]);
     setMarketingWorkItems([]);
+    setMarketingPillarNotes([]);
     setActivePillar('audience');
     setNewWorkTitle('');
     resetGoalForm('audience');
@@ -1744,84 +1880,57 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
     ? Math.round(filteredUsers.reduce((sum, user) => sum + leadScore(user, getAnswerCount(user.id, user.profile_role), getTotalQuestionsForRole(user.profile_role)), 0) / filteredUsers.length)
     : 0;
   const marketingPillarStats = useMemo(() => {
-    const usersWithSource = users.filter((user) => user.source?.trim()).length;
-    const usersWithContactDate = users.filter((user) => user.next_contact_date).length;
-    const advancedStageCount = users.filter((user) => !['Найден', 'Связались', 'Отказ', 'Архив'].includes(user.stage)).length;
-    const connectedOrActive = users.filter((user) => ['Подключён', 'Активно пользуется'].includes(user.stage)).length;
-    const activeUserCount = users.filter((user) => !user.is_archived && !['Отказ', 'Архив'].includes(user.stage)).length;
-    const sourceCoverage = percent(usersWithSource, users.length);
-    const contactPlanCoverage = percent(usersWithContactDate, activeUserCount);
-    const roleCoverage = new Set(users.map((user) => user.profile_role)).size >= 2 ? 18 : 0;
-    const interviewDepth = clampScore(visibleActiveQuestions.length * 7 + answeredTotal * 2 + questionCoverage * 0.45);
     const workByPillar = new Map<MarketingPillarKey, MarketingWorkItem[]>();
+    const goalsByPillar = new Map<MarketingPillarKey, MarketingGoal[]>();
+    const notesByPillar = new Map(marketingPillarNotes.map((note) => [note.pillar, note]));
     marketingPillars.forEach((pillar) => workByPillar.set(pillar.key, []));
+    marketingPillars.forEach((pillar) => goalsByPillar.set(pillar.key, []));
     marketingWorkItems.forEach((item) => workByPillar.get(item.pillar)?.push(item));
+    marketingGoals.forEach((goal) => goalsByPillar.get(goal.pillar)?.push(goal));
 
-    const signalByPillar: Record<MarketingPillarKey, number> = {
-      audience: clampScore(users.length * 7 + cityStats.length * 6 + industryStats.length * 6 + interviewDepth * 0.45 + roleCoverage),
-      competitors: clampScore(users.length * 4 + termsOptions.length * 4 + interviewDepth * 0.25),
-      packaging: clampScore(termsOptions.length * 7 + metrics.free * 5 + metrics.discounted * 5 + visibleActiveQuestions.length * 3),
-      positioning: clampScore(industryStats.length * 8 + roleCoverage + hotLeadCount * 10 + averageLeadScore * 0.35),
-      offer: clampScore(termsOptions.length * 8 + hotLeadCount * 14 + conversionRate * 0.5 + metrics.discounted * 5),
-      content: clampScore(questionCategories.length * 10 + visibleActiveQuestions.length * 5 + answeredTotal * 2),
-      ads: clampScore(sourceCoverage * 0.8 + usersWithSource * 4 + contactPlanCoverage * 0.2),
-      sales: clampScore(advancedStageCount * 8 + contactPlanCoverage * 0.45 + hotLeadCount * 10 + conversionRate * 0.4),
-      analytics: clampScore(questionCoverage * 0.4 + sourceCoverage * 0.35 + users.length * 4 + visibleActiveQuestions.length * 4),
-      retention: clampScore(connectedOrActive * 18 + metrics.connected * 14 + contactPlanCoverage * 0.25),
-      reputation: clampScore(connectedOrActive * 12 + questionCategories.length * 5 + answeredTotal),
-      brand: clampScore(questionCategories.length * 7 + visibleActiveQuestions.length * 4 + industryStats.length * 6 + roleCoverage),
-    };
-
-    const baseStats = marketingPillars.map((pillar) => {
+    return marketingPillars.map((pillar) => {
       const workItems = workByPillar.get(pillar.key) ?? [];
+      const goalItems = goalsByPillar.get(pillar.key) ?? [];
+      const note = notesByPillar.get(pillar.key);
       const done = workItems.filter((item) => item.status === 'done').length;
       const doing = workItems.filter((item) => item.status === 'doing').length;
       const workScore = workItems.length > 0 ? percent(done + doing * 0.5, workItems.length) : 0;
-      const signalScore = signalByPillar[pillar.key];
-      const score = clampScore(workScore * 0.56 + signalScore * 0.44);
+      const noteFields = [note?.summary, note?.output, note?.questionsText, note?.metricsText].filter((value) => value?.trim()).length;
+      const goalScore = goalItems.length > 0 ? 12 : 0;
+      const taskScore = workItems.length > 0 ? 12 : 0;
+      const noteScore = noteFields * 15;
+      const progressScore = workItems.length > 0 ? Math.round(workScore * 0.16) : 0;
+      const score = clampScore(noteScore + goalScore + taskScore + progressScore);
+      const isFilled = score > 0;
       return {
         ...pillar,
+        note,
         score,
-        signalScore,
         workScore,
         workTotal: workItems.length,
         workDone: done,
         workDoing: doing,
         workTodo: workItems.filter((item) => item.status === 'todo').length,
+        goalsTotal: goalItems.length,
+        goalsDone: goalItems.filter((goal) => goal.status === 'done').length,
+        isFilled,
       };
     });
-
-    const scoreByKey = new Map(baseStats.map((item) => [item.key, item.score]));
-    return baseStats.map((item) => ({
-      ...item,
-      blockedBy: item.dependsOn.filter((key) => (scoreByKey.get(key) ?? 0) < 50),
-    }));
-  }, [
-    users,
-    visibleActiveQuestions.length,
-    answeredTotal,
-    questionCoverage,
-    marketingWorkItems,
-    cityStats,
-    industryStats,
-    termsOptions.length,
-    metrics.free,
-    metrics.discounted,
-    metrics.connected,
-    hotLeadCount,
-    averageLeadScore,
-    conversionRate,
-    questionCategories.length,
-  ]);
-  const marketingReadiness = marketingPillarStats.length > 0
-    ? Math.round(marketingPillarStats.reduce((sum, item) => sum + item.score, 0) / marketingPillarStats.length)
-    : 0;
+  }, [marketingWorkItems, marketingGoals, marketingPillarNotes]);
+  const filledMarketingPillars = marketingPillarStats.filter((item) => item.isFilled).length;
+  const marketingReadiness = percent(filledMarketingPillars, marketingPillarStats.length);
   const activePillarStat = marketingPillarStats.find((item) => item.key === activePillar) ?? marketingPillarStats[0];
+  const activePillarNote = activePillarStat.note ?? {
+    pillar: activePillar,
+    summary: '',
+    output: '',
+    questionsText: '',
+    metricsText: '',
+    updatedAt: '',
+  };
   const activePillarWorkItems = marketingWorkItems.filter((item) => item.pillar === activePillar);
-  const criticalMarketingGaps = marketingPillarStats
-    .filter((item) => item.score < 50 || item.blockedBy.length > 0)
-    .sort((a, b) => a.score - b.score)
-    .slice(0, 4);
+  const emptyMarketingPillars = marketingPillarStats.filter((item) => !item.isFilled);
+  const criticalMarketingGaps = emptyMarketingPillars.slice(0, 4);
   const nextMarketingStep = marketingWorkItems.find((item) => item.status !== 'done' && item.priority === 'high')
     ?? marketingWorkItems.find((item) => item.status !== 'done')
     ?? null;
@@ -1846,6 +1955,47 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
     ? Math.round(computedMarketingGoals.reduce((sum, goal) => sum + goal.progress, 0) / computedMarketingGoals.length)
     : 0;
   const immediateGoalPlan = sortedMarketingGoals.filter((goal) => goal.status !== 'done' && goal.progress < 100).slice(0, 3);
+  const cityMapMarkByCity = useMemo(() => new Map(cityMapMarks.map((mark) => [mark.city, mark])), [cityMapMarks]);
+  const cityPointByName = useMemo(() => new Map(belarusCityPoints.map((point) => [point.city, point])), []);
+  const cityLoadItems = useMemo(() => belarusCityPoints.map((point) => {
+    const cityUsers = users.filter((user) => user.city === point.city);
+    const filteredCityUsers = filteredUsers.filter((user) => user.city === point.city);
+    const activeCityUsers = cityUsers.filter((user) => !user.is_archived && !['Отказ', 'Архив'].includes(user.stage));
+    const connectedCityUsers = cityUsers.filter((user) => ['Подключён', 'Активно пользуется'].includes(user.stage));
+    const hotCityUsers = cityUsers.filter((user) => {
+      const answered = getAnswerCount(user.id, user.profile_role);
+      const total = getTotalQuestionsForRole(user.profile_role);
+      return leadScore(user, answered, total) >= 70;
+    });
+    const mark = cityMapMarkByCity.get(point.city);
+
+    return {
+      ...point,
+      total: cityUsers.length,
+      filteredTotal: filteredCityUsers.length,
+      active: activeCityUsers.length,
+      connected: connectedCityUsers.length,
+      hot: hotCityUsers.length,
+      mark,
+    };
+  }), [users, filteredUsers, cityMapMarkByCity, getAnswerCount, getTotalQuestionsForRole]);
+  const maxBelarusCityLoad = Math.max(...cityLoadItems.map((item) => item.total), 1);
+  const markedCitiesCount = cityLoadItems.filter((item) => item.mark && (item.mark.status !== 'none' || item.mark.note.trim())).length;
+  const selectedCityLoad = cityLoadItems.find((item) => item.city === selectedBelarusCity) ?? cityLoadItems[0];
+  const sortedCityLoadItems = useMemo(() => [...cityLoadItems].sort((a, b) => (
+    b.total - a.total || b.active - a.active || a.city.localeCompare(b.city, 'ru')
+  )), [cityLoadItems]);
+  const unknownCityLoads = useMemo(() => {
+    const counts = new Map<string, number>();
+    users.forEach((user) => {
+      if (cityPointByName.has(user.city)) return;
+      counts.set(user.city, (counts.get(user.city) ?? 0) + 1);
+    });
+    return Array.from(counts.entries())
+      .map(([city, count]) => ({ city, count }))
+      .sort((a, b) => b.count - a.count || a.city.localeCompare(b.city, 'ru'));
+  }, [users, cityPointByName]);
+  const belarusMapTransform = `translate(${50 + belarusMapOffset.x} ${50 + belarusMapOffset.y}) scale(${belarusMapZoom}) translate(-50 -50)`;
   const selectedAnswerCount = selected ? getAnswerCount(selected.id, selected.profile_role) : 0;
   const selectedTotalQuestions = selected ? getTotalQuestionsForRole(selected.profile_role) : 0;
   const selectedAnswerProgress = selectedTotalQuestions > 0 ? Math.round((selectedAnswerCount / selectedTotalQuestions) * 100) : 0;
@@ -1881,7 +2031,7 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
       '# PilotBase: План роста',
       '',
       `Дата: ${localDateStamp()}`,
-      `Общая готовность: ${marketingReadiness}%`,
+      `Заполнено направлений: ${filledMarketingPillars}/${marketingPillarStats.length} (${marketingReadiness}%)`,
       `Лидов в базе: ${users.length}`,
       `Заполненность интервью: ${questionCoverage}%`,
       '',
@@ -1892,12 +2042,22 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
       '## Направления',
       '',
       ...marketingPillarStats.flatMap((pillar) => [
-        `### ${pillar.label} — ${pillar.score}%`,
+        `### ${pillar.label} — ${pillar.isFilled ? 'заполнено' : 'пусто'}`,
         `Фаза: ${pillar.phase}`,
-        `Результат: ${pillar.output}`,
+        `Описание: ${pillar.note?.summary.trim() || 'не заполнено'}`,
+        `Результат: ${pillar.note?.output.trim() || 'не заполнено'}`,
+        'Контрольные вопросы:',
+        ...(splitGoalLines(pillar.note?.questionsText ?? '').length > 0
+          ? splitGoalLines(pillar.note?.questionsText ?? '').map((item) => `- ${item}`)
+          : ['- не заполнено']),
+        'Метрики:',
+        ...(splitGoalLines(pillar.note?.metricsText ?? '').length > 0
+          ? splitGoalLines(pillar.note?.metricsText ?? '').map((item) => `- ${item}`)
+          : ['- не заполнено']),
         `Зависит от: ${pillar.dependsOn.length > 0 ? pillar.dependsOn.map((key) => pillarByKey[key].label).join(', ') : 'нет зависимостей'}`,
         `Влияет на: ${pillar.next.length > 0 ? pillar.next.map((key) => pillarByKey[key].label).join(', ') : 'финальный блок'}`,
         `Задачи: ${pillar.workDone}/${pillar.workTotal} готово`,
+        `Цели: ${pillar.goalsDone}/${pillar.goalsTotal} достигнуто`,
         '',
       ]),
       '## Открытые задачи',
@@ -1977,12 +2137,21 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
         <section className="metrics-grid">
           {viewMode === 'growth' ? (
             <>
-              <MetricCard label="Готовность плана" value={`${marketingReadiness}%`} icon="PL" />
+              <MetricCard label="Заполнено направлений" value={`${filledMarketingPillars}/${marketingPillarStats.length}`} icon="PL" />
               <MetricCard label="Прогресс целей" value={`${averageGoalProgress}%`} icon="GL" />
               <MetricCard label="Целей достигнуто" value={`${achievedMarketingGoals}/${computedMarketingGoals.length}`} icon="OK" />
               <MetricCard label="Задачи" value={`${marketingWorkDone}/${marketingWorkItems.length}`} icon="WK" />
-              <MetricCard label="Блокеры" value={criticalMarketingGaps.length} icon="BL" tone={criticalMarketingGaps.length > 0 ? 'warning' : undefined} />
+              <MetricCard label="Пустые блоки" value={emptyMarketingPillars.length} icon="BL" tone={emptyMarketingPillars.length > 0 ? 'warning' : undefined} />
               <MetricCard label="Интервью" value={`${questionCoverage}%`} icon="QA" />
+            </>
+          ) : viewMode === 'geo' ? (
+            <>
+              <MetricCard label="Города на карте" value={cityLoadItems.length} icon="BY" />
+              <MetricCard label="Пользователи" value={users.length} icon="US" />
+              <MetricCard label="Активные города" value={cityLoadItems.filter((city) => city.total > 0).length} icon="CT" />
+              <MetricCard label="Пометки" value={markedCitiesCount} icon="MK" />
+              <MetricCard label="Горячие лиды" value={hotLeadCount} icon="HI" />
+              <MetricCard label="Подключены" value={metrics.connected} icon="CV" />
             </>
           ) : (
             <>
@@ -1996,7 +2165,7 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
           )}
         </section>
 
-        {viewMode !== 'questions' && viewMode !== 'growth' && (
+        {viewMode !== 'questions' && viewMode !== 'growth' && viewMode !== 'geo' && (
           <section className="ops-grid">
             <section className="filters-card">
               <div className="panel-heading compact">
@@ -2120,7 +2289,7 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
             ))}
           </div>
           <div className="toolbar-actions">
-            {viewMode !== 'questions' && viewMode !== 'growth' && (
+            {viewMode !== 'questions' && viewMode !== 'growth' && viewMode !== 'geo' && (
               <label className="sort-control">
                 <span>Сортировка</span>
                 <select value={sortMode} onChange={(event) => setSortMode(event.target.value as SortMode)}>
@@ -2132,6 +2301,11 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
               <div className="export-actions">
                 <button className="secondary-button" onClick={exportMarketingPlan} type="button"><span aria-hidden="true">↓</span> Markdown</button>
                 <button className="secondary-button" onClick={clearGrowthPlan} type="button"><span aria-hidden="true">×</span> Очистить</button>
+              </div>
+            ) : viewMode === 'geo' ? (
+              <div className="export-actions">
+                <button className="secondary-button" onClick={resetBelarusMapView} type="button"><span aria-hidden="true">⌂</span> Сбросить карту</button>
+                <button className="secondary-button" onClick={openCreateModal} type="button"><span aria-hidden="true">+</span> Добавить пользователя</button>
               </div>
             ) : (
               <div className="export-actions">
@@ -2146,7 +2320,7 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
           </div>
         </div>
 
-        {viewMode !== 'growth' && (
+        {viewMode !== 'growth' && viewMode !== 'geo' && (
           <section className="saved-views-bar">
             <div className="saved-views-create">
               <input
@@ -2371,27 +2545,26 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
               <div className="card-heading">
                 <div>
                   <h2>Карта маркетинговой системы</h2>
-                  <p>Каждый блок связан с предыдущими решениями и влияет на следующие этапы роста.</p>
+                  <p>Это ручная карта. Пока ты не заполнил направление, оно остается пустым.</p>
                 </div>
-                <div className={`readiness-badge ${scoreClass(marketingReadiness)}`}>
-                  <span>Готовность</span>
-                  <strong>{marketingReadiness}%</strong>
+                <div className="readiness-badge blue">
+                  <span>Заполнено</span>
+                  <strong>{filledMarketingPillars}/{marketingPillarStats.length}</strong>
                 </div>
               </div>
 
               <div className="growth-flow">
                 {Array.from(new Set(marketingPillars.map((pillar) => pillar.phase))).map((phase) => {
                   const phaseItems = marketingPillarStats.filter((pillar) => pillar.phase === phase);
-                  const phaseScore = phaseItems.length > 0
-                    ? Math.round(phaseItems.reduce((sum, item) => sum + item.score, 0) / phaseItems.length)
-                    : 0;
+                  const phaseFilled = phaseItems.filter((pillar) => pillar.isFilled).length;
+                  const phaseProgress = percent(phaseFilled, phaseItems.length);
                   return (
                     <article className="growth-phase" key={phase}>
                       <div>
                         <span>{phase}</span>
-                        <strong>{phaseScore}%</strong>
+                        <strong>{phaseFilled}/{phaseItems.length}</strong>
                       </div>
-                      <div className="progress-line"><span style={{ width: `${phaseScore}%` }} /></div>
+                      <div className="progress-line"><span style={{ width: `${phaseProgress}%` }} /></div>
                     </article>
                   );
                 })}
@@ -2407,10 +2580,12 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
                   >
                     <span>{pillar.phase}</span>
                     <strong>{pillar.label}</strong>
-                    <small>{pillar.output}</small>
+                    <small>{pillar.note?.summary.trim() || 'Пока не заполнено. Открой блок и внеси свои данные.'}</small>
                     <div className="pillar-card-foot">
-                      <b className={`score-pill ${scoreClass(pillar.score)}`}>{pillar.score}%</b>
-                      {pillar.blockedBy.length > 0 && <em>Блокер</em>}
+                      <b className={pillar.isFilled ? 'manual-state-pill filled' : 'manual-state-pill empty'}>
+                        {pillar.isFilled ? 'Заполнено' : 'Пусто'}
+                      </b>
+                      <em>{pillar.goalsTotal} целей · {pillar.workTotal} задач</em>
                     </div>
                   </button>
                 ))}
@@ -2421,32 +2596,56 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
               <div className="card-heading">
                 <div>
                   <h2>{activePillarStat.label}</h2>
-                  <p>{activePillarStat.description}</p>
+                  <p>Заполни направление своими выводами, вопросами, метриками и задачами.</p>
                 </div>
-                <div className={`growth-score ${scoreClass(activePillarStat.score)}`}>
-                  <strong>{activePillarStat.score}%</strong>
-                  <span>ready</span>
+                <div className={activePillarStat.isFilled ? 'growth-score green' : 'growth-score red'}>
+                  <strong>{activePillarStat.isFilled ? 'Есть' : 'Пусто'}</strong>
+                  <span>данные</span>
                 </div>
               </div>
 
-              <div className="growth-split">
-                <div>
-                  <h3>Результат блока</h3>
-                  <p>{activePillarStat.output}</p>
-                </div>
-                <div>
-                  <h3>Готовность</h3>
-                  <div className="score-breakdown">
-                    <span>Задачи: {activePillarStat.workScore}%</span>
-                    <span>Данные: {activePillarStat.signalScore}%</span>
-                  </div>
-                  <div className="progress-line"><span style={{ width: `${activePillarStat.score}%` }} /></div>
-                </div>
+              <div className="pillar-note-editor">
+                <label>
+                  <span>Описание направления</span>
+                  <textarea
+                    rows={4}
+                    value={activePillarNote.summary}
+                    onChange={(event) => updateMarketingPillarNote(activePillar, { summary: event.target.value })}
+                    placeholder="Что уже понятно по этому направлению и какие выводы важны для роста"
+                  />
+                </label>
+                <label>
+                  <span>Результат / артефакты</span>
+                  <textarea
+                    rows={4}
+                    value={activePillarNote.output}
+                    onChange={(event) => updateMarketingPillarNote(activePillar, { output: event.target.value })}
+                    placeholder="Что должно появиться на выходе: документ, оффер, скрипт, контент-план, dashboard"
+                  />
+                </label>
+                <label>
+                  <span>Контрольные вопросы</span>
+                  <textarea
+                    rows={5}
+                    value={activePillarNote.questionsText}
+                    onChange={(event) => updateMarketingPillarNote(activePillar, { questionsText: event.target.value })}
+                    placeholder="Каждый вопрос с новой строки"
+                  />
+                </label>
+                <label>
+                  <span>Метрики</span>
+                  <textarea
+                    rows={5}
+                    value={activePillarNote.metricsText}
+                    onChange={(event) => updateMarketingPillarNote(activePillar, { metricsText: event.target.value })}
+                    placeholder="Каждая метрика с новой строки"
+                  />
+                </label>
               </div>
 
               <div className="dependency-grid">
                 <div>
-                  <h3>Зависит от</h3>
+                  <h3>Связано с</h3>
                   <div className="dependency-list">
                     {activePillarStat.dependsOn.length === 0 ? <span className="muted">Стартовый блок</span> : activePillarStat.dependsOn.map((key) => (
                       <button key={key} onClick={() => setActivePillar(key)} type="button">{pillarByKey[key].label}</button>
@@ -2454,29 +2653,12 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
                   </div>
                 </div>
                 <div>
-                  <h3>Влияет на</h3>
+                  <h3>Дальше влияет на</h3>
                   <div className="dependency-list">
                     {activePillarStat.next.map((key) => (
                       <button key={key} onClick={() => setActivePillar(key)} type="button">{pillarByKey[key].label}</button>
                     ))}
                   </div>
-                </div>
-              </div>
-
-              {activePillarStat.blockedBy.length > 0 && (
-                <div className="growth-warning">
-                  Сначала усили: {activePillarStat.blockedBy.map((key) => pillarByKey[key].label).join(', ')}.
-                </div>
-              )}
-
-              <div className="growth-lists">
-                <div>
-                  <h3>Контрольные вопросы</h3>
-                  {activePillarStat.questions.map((question) => <span key={question}>{question}</span>)}
-                </div>
-                <div>
-                  <h3>Метрики</h3>
-                  {activePillarStat.metrics.map((metric) => <span key={metric}>{metric}</span>)}
                 </div>
               </div>
             </section>
@@ -2533,38 +2715,197 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
               <div className="card-heading">
                 <div>
                   <h2>Управленческие сигналы</h2>
-                  <p>Что мешает системе работать как единый маркетинг и продажи контур.</p>
+                  <p>Короткая сводка по тому, что ты уже внес вручную.</p>
                 </div>
               </div>
 
               <div className="signal-grid">
                 <article>
                   <span>Следующий шаг</span>
-                  <strong>{nextMarketingStep ? nextMarketingStep.title : 'Критичных задач нет'}</strong>
+                  <strong>{nextMarketingStep ? nextMarketingStep.title : 'Задач пока нет'}</strong>
                   {nextMarketingStep && <small>{pillarByKey[nextMarketingStep.pillar].label}</small>}
                 </article>
                 <article>
-                  <span>Данные аудитории</span>
-                  <strong>{users.length} лидов · {visibleActiveQuestions.length} вопросов</strong>
-                  <small>Заполненность интервью: {questionCoverage}%</small>
+                  <span>Направления</span>
+                  <strong>{filledMarketingPillars}/{marketingPillarStats.length} заполнено</strong>
+                  <small>{emptyMarketingPillars.length} еще пустые</small>
                 </article>
                 <article>
-                  <span>Связь с продажами</span>
-                  <strong>{hotLeadCount} горячих · {conversionRate}% подключений</strong>
-                  <small>Следи за follow-up и источниками</small>
+                  <span>Города</span>
+                  <strong>{markedCitiesCount} пометок · {cityLoadItems.filter((city) => city.total > 0).length} с пользователями</strong>
+                  <small>Открывай «Карта РБ» для нагрузки по городам</small>
                 </article>
               </div>
 
               <div className="gap-list">
-                {criticalMarketingGaps.length === 0 ? (
-                  <span className="muted">Критических разрывов нет. Можно усиливать тесты и масштабирование.</span>
+                {emptyMarketingPillars.length === 0 ? (
+                  <span className="muted">Все направления имеют ручные данные. Можно углублять цели и задачи.</span>
                 ) : criticalMarketingGaps.map((gap) => (
                   <button key={gap.key} onClick={() => setActivePillar(gap.key)} type="button">
                     <strong>{gap.label}</strong>
-                    <span>{gap.score}% · {gap.blockedBy.length > 0 ? `зависит от ${gap.blockedBy.map((key) => pillarByKey[key].label).join(', ')}` : 'мало готовности'}</span>
+                    <span>Пусто: добавь описание, результат, вопросы, метрики или задачу.</span>
                   </button>
                 ))}
               </div>
+            </section>
+          </section>
+        )}
+
+        {viewMode === 'geo' && (
+          <section className="geo-workspace">
+            <section className="content-card belarus-map-card">
+              <div className="card-heading">
+                <div>
+                  <h2>Карта загрузки по Беларуси</h2>
+                  <p>Маркеры показывают пользователей по городам. Масштаб и пометки сохраняют рабочий контекст.</p>
+                </div>
+                <div className="map-toolbar" aria-label="Управление картой">
+                  <button className="secondary-button icon-button" onClick={() => changeBelarusMapZoom(-0.2)} type="button" title="Отдалить">−</button>
+                  <span>{Math.round(belarusMapZoom * 100)}%</span>
+                  <button className="secondary-button icon-button" onClick={() => changeBelarusMapZoom(0.2)} type="button" title="Приблизить">+</button>
+                  <button className="secondary-button" onClick={resetBelarusMapView} type="button">Сброс</button>
+                </div>
+              </div>
+
+              <div className="belarus-map-shell">
+                <div className="belarus-map-stage" aria-label="Карта Республики Беларусь с городами">
+                  <svg className="belarus-map-svg" role="img" viewBox="0 0 100 100" aria-label="Карта РБ">
+                    <defs>
+                      <linearGradient id="belarusMapFill" x1="0" x2="1" y1="0" y2="1">
+                        <stop offset="0%" stopColor="#eef6ff" />
+                        <stop offset="100%" stopColor="#eaf7ef" />
+                      </linearGradient>
+                    </defs>
+                    <g transform={belarusMapTransform}>
+                      <path
+                        className="belarus-outline"
+                        d="M18 20 L31 14 L43 18 L54 12 L68 16 L80 27 L84 39 L77 49 L85 63 L78 76 L65 82 L55 78 L43 88 L31 82 L19 86 L13 73 L18 61 L12 51 L17 38 L13 29 Z"
+                      />
+                      <path className="belarus-region-line" d="M31 14 C35 36 36 58 31 82" />
+                      <path className="belarus-region-line" d="M54 12 C51 34 52 58 55 78" />
+                      <path className="belarus-region-line" d="M17 38 C35 42 56 42 80 27" />
+                      <path className="belarus-region-line" d="M18 61 C38 62 61 61 85 63" />
+                      {cityLoadItems.map((city) => {
+                        const radius = Math.max(2.8, Math.min(8.5, 2.8 + (city.total / maxBelarusCityLoad) * 5.8));
+                        const loadTone = city.total === 0
+                          ? 'empty'
+                          : city.total >= maxBelarusCityLoad * 0.66
+                            ? 'high'
+                            : city.total >= maxBelarusCityLoad * 0.34
+                              ? 'medium'
+                              : 'low';
+                        const markStatus = city.mark?.status ?? 'none';
+                        return (
+                          <g
+                            className={`belarus-city load-${loadTone} mark-${markStatus} ${selectedBelarusCity === city.city ? 'selected' : ''}`}
+                            key={city.city}
+                            onClick={() => setSelectedBelarusCity(city.city)}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter' || event.key === ' ') setSelectedBelarusCity(city.city);
+                            }}
+                            role="button"
+                            tabIndex={0}
+                          >
+                            <title>{city.city}: {city.total} пользователей</title>
+                            <circle className="city-halo" cx={city.x} cy={city.y} r={radius + 3} />
+                            <circle className="city-dot" cx={city.x} cy={city.y} r={radius} />
+                            {city.total > 0 && <text className="city-count" x={city.x} y={city.y + 1.2}>{city.total}</text>}
+                            <text className="city-label" x={city.x + radius + 2.4} y={city.y - radius - 1}>{city.city}</text>
+                          </g>
+                        );
+                      })}
+                    </g>
+                  </svg>
+                  <div className="map-pan-controls" aria-label="Сдвиг карты">
+                    <button className="secondary-button icon-button" onClick={() => nudgeBelarusMap(0, -5)} type="button" title="Вверх">↑</button>
+                    <button className="secondary-button icon-button" onClick={() => nudgeBelarusMap(-5, 0)} type="button" title="Влево">←</button>
+                    <button className="secondary-button icon-button" onClick={() => nudgeBelarusMap(5, 0)} type="button" title="Вправо">→</button>
+                    <button className="secondary-button icon-button" onClick={() => nudgeBelarusMap(0, 5)} type="button" title="Вниз">↓</button>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section className="content-card city-detail-card">
+              <div className="card-heading">
+                <div>
+                  <h2>{selectedCityLoad.city}</h2>
+                  <p>{selectedCityLoad.region}</p>
+                </div>
+                <span className={`city-status-pill ${selectedCityLoad.mark?.status ?? 'none'}`}>
+                  {cityMapStatusLabel[selectedCityLoad.mark?.status ?? 'none']}
+                </span>
+              </div>
+
+              <div className="city-load-metrics">
+                <article><span>Всего</span><strong>{selectedCityLoad.total}</strong></article>
+                <article><span>По фильтру</span><strong>{selectedCityLoad.filteredTotal}</strong></article>
+                <article><span>Активные</span><strong>{selectedCityLoad.active}</strong></article>
+                <article><span>Горячие</span><strong>{selectedCityLoad.hot}</strong></article>
+                <article><span>Подключены</span><strong>{selectedCityLoad.connected}</strong></article>
+              </div>
+
+              <div className="city-mark-form">
+                <label>
+                  <span>Метка города</span>
+                  <select
+                    value={selectedCityLoad.mark?.status ?? 'none'}
+                    onChange={(event) => updateCityMapMark(selectedCityLoad.city, { status: event.target.value as CityMapStatus })}
+                  >
+                    {cityMapStatusOptions.map((status) => (
+                      <option key={status} value={status}>{cityMapStatusLabel[status]}</option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  <span>Заметка</span>
+                  <textarea
+                    rows={5}
+                    value={selectedCityLoad.mark?.note ?? ''}
+                    onChange={(event) => updateCityMapMark(selectedCityLoad.city, { note: event.target.value })}
+                    placeholder="Что важно по городу: гипотеза, канал, партнеры, ограничения, следующий шаг"
+                  />
+                </label>
+                <div className="city-detail-actions">
+                  <button className="primary-button" onClick={() => openCityUsers(selectedCityLoad.city)} type="button">Показать в базе</button>
+                  <button className="secondary-button" onClick={() => updateCityMapMark(selectedCityLoad.city, { status: 'none', note: '' })} type="button">Снять метку</button>
+                </div>
+              </div>
+            </section>
+
+            <section className="content-card city-load-card">
+              <div className="card-heading">
+                <div>
+                  <h2>Города и загрузка</h2>
+                  <p>Список отсортирован по количеству пользователей.</p>
+                </div>
+              </div>
+              <div className="city-load-list">
+                {sortedCityLoadItems.map((city) => {
+                  const markStatus = city.mark?.status ?? 'none';
+                  return (
+                    <button
+                      className={selectedBelarusCity === city.city ? 'city-load-row active' : 'city-load-row'}
+                      key={city.city}
+                      onClick={() => setSelectedBelarusCity(city.city)}
+                      type="button"
+                    >
+                      <span>
+                        <strong>{city.city}</strong>
+                        <small>{city.region}</small>
+                      </span>
+                      <b>{city.total}</b>
+                      <em className={`city-status-pill ${markStatus}`}>{cityMapStatusLabel[markStatus]}</em>
+                    </button>
+                  );
+                })}
+              </div>
+              {unknownCityLoads.length > 0 && (
+                <div className="unknown-city-list">
+                  <strong>Города без координат на карте</strong>
+                  {unknownCityLoads.map((item) => <span key={item.city}>{item.city}: {item.count}</span>)}
+                </div>
+              )}
             </section>
           </section>
         )}
