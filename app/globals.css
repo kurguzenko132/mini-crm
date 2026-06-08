@@ -290,6 +290,12 @@ table {
   background: var(--surface-soft);
 }
 
+.secondary-button.danger {
+  border-color: #f3b3b3;
+  background: var(--red-soft);
+  color: var(--red);
+}
+
 .wide {
   width: 100%;
 }
@@ -1593,7 +1599,7 @@ tbody tr:hover {
   gap: 8px;
 }
 
-/* Growth OS */
+/* Growth plan */
 .growth-workspace {
   display: grid;
   grid-template-columns: minmax(0, 1.25fr) minmax(360px, 0.85fr);
@@ -1715,10 +1721,96 @@ tbody tr:hover {
   background: var(--blue);
 }
 
+.goal-editor {
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #ffffff;
+  padding: 12px;
+}
+
+.goal-editor-head,
+.goal-actions,
+.goal-card-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.goal-editor-head h3 {
+  font-size: 16px;
+}
+
+.goal-editor-head p,
+.goal-actions span {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.4;
+}
+
+.goal-form-grid,
+.goal-notes-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.goal-notes-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.goal-form-grid label,
+.goal-wide-field,
+.goal-notes-grid label {
+  display: grid;
+  gap: 7px;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.goal-form-grid label:first-child {
+  grid-column: span 2;
+}
+
+.goal-wide-field span,
+.goal-form-grid label span,
+.goal-notes-grid label span {
+  color: var(--muted);
+  text-transform: uppercase;
+  font-size: 10px;
+}
+
 .goal-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(280px, 1fr));
   gap: 10px;
+}
+
+.goal-empty {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 6px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface-soft);
+  padding: 18px;
+}
+
+.goal-empty strong {
+  color: var(--ink);
+  font-size: 15px;
+}
+
+.goal-empty p {
+  max-width: 680px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .goal-card {
@@ -1730,11 +1822,22 @@ tbody tr:hover {
   padding: 12px;
 }
 
+.goal-card.done {
+  border-color: #a7dbb8;
+  background: var(--green-soft);
+}
+
 .goal-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+}
+
+.goal-head-meta {
+  display: grid;
+  justify-items: end;
+  gap: 6px;
 }
 
 .goal-head span {
@@ -1754,6 +1857,30 @@ tbody tr:hover {
   color: var(--muted);
   font-size: 13px;
   line-height: 1.45;
+}
+
+.goal-status {
+  border-radius: 999px;
+  padding: 4px 7px;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.goal-status.active {
+  background: var(--blue-soft);
+  color: var(--blue);
+}
+
+.goal-status.paused {
+  background: var(--amber-soft);
+  color: var(--amber);
+}
+
+.goal-status.done {
+  background: #ffffff;
+  color: var(--green);
 }
 
 .goal-values {
@@ -1782,6 +1909,10 @@ tbody tr:hover {
   padding-top: 10px;
 }
 
+.goal-plan.achievements {
+  border-top-style: dashed;
+}
+
 .goal-plan strong {
   color: var(--ink);
   font-size: 13px;
@@ -1796,6 +1927,13 @@ tbody tr:hover {
   padding: 7px 9px;
   font-size: 12px;
   line-height: 1.35;
+}
+
+.goal-card-actions {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
 }
 
 .next-step-list {
@@ -2110,6 +2248,10 @@ tbody tr:hover {
   .next-step-list {
     grid-template-columns: 1fr;
   }
+
+  .goal-form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 1040px) {
@@ -2188,11 +2330,23 @@ tbody tr:hover {
   .growth-lists,
   .signal-grid,
   .next-step-list,
+  .goal-form-grid,
+  .goal-notes-grid,
   .analytics-grid,
   .bottom-grid,
   .question-stats,
   .form-grid {
     grid-template-columns: 1fr;
+  }
+
+  .goal-editor-head,
+  .goal-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .goal-form-grid label:first-child {
+    grid-column: auto;
   }
 
   .work-add-row,

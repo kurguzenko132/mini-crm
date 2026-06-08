@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { CONDITIONS, DEFAULT_CITIES, DEFAULT_INDUSTRIES, PRIORITIES, STAGES } from '@/lib/constants';
 import { demoQuestions, demoUsers } from '@/lib/demo-data';
 import { downloadTextFile, usersToCsv } from '@/lib/export';
@@ -65,30 +65,25 @@ type MarketingPillar = {
   dependsOn: MarketingPillarKey[];
   next: MarketingPillarKey[];
 };
-type MarketingGoalMetric =
-  | 'interviewedUsers'
-  | 'questionCoverage'
-  | 'activeLeads'
-  | 'contactPlanCoverage'
-  | 'hotLeads'
-  | 'conversionRate'
-  | 'sourceCoverage'
-  | 'marketingReadiness'
-  | 'caseCandidates'
-  | 'contentBrandReadiness';
 type MarketingGoalPriority = 'critical' | 'high' | 'medium';
+type MarketingGoalStatus = 'active' | 'paused' | 'done';
 type MarketingGoal = {
   id: string;
   pillar: MarketingPillarKey;
   title: string;
   description: string;
-  metric: MarketingGoalMetric;
+  current: number;
   target: number;
   unit: string;
-  horizon: string;
+  deadline: string;
   priority: MarketingGoalPriority;
-  plan: string[];
+  status: MarketingGoalStatus;
+  planText: string;
+  achievementsText: string;
+  createdAt: string;
+  updatedAt: string;
 };
+type MarketingGoalInput = Omit<MarketingGoal, 'id' | 'createdAt' | 'updatedAt'>;
 type SavedView = {
   id: string;
   name: string;
@@ -105,7 +100,7 @@ type ContactQueueItem = {
 };
 
 const viewModeLabel: Record<ViewMode, string> = {
-  growth: 'Growth OS',
+  growth: 'План роста',
   table: 'Пользователи',
   stages: 'Воронка',
   analytics: 'Аналитика',
@@ -113,7 +108,7 @@ const viewModeLabel: Record<ViewMode, string> = {
 };
 
 const viewModeDescription: Record<ViewMode, string> = {
-  growth: 'Связанная система маркетинга: от аудитории и бренда до продаж, аналитики и удержания',
+  growth: 'Цели, планы, достижения и маркетинговые направления в одном рабочем разделе',
   table: 'Отслеживание первых клиентов перед запуском компании',
   stages: 'Доска этапов по всей маркетинговой воронке',
   analytics: 'Метрики по каналам, сегментам и качеству интервью',
@@ -121,7 +116,7 @@ const viewModeDescription: Record<ViewMode, string> = {
 };
 
 const navigationItems: Array<{ mode: ViewMode; label: string; icon: string }> = [
-  { mode: 'growth', label: 'Growth OS', icon: '00' },
+  { mode: 'growth', label: 'План роста', icon: '00' },
   { mode: 'table', label: 'Пользователи', icon: '01' },
   { mode: 'questions', label: 'Интервью', icon: '02' },
   { mode: 'stages', label: 'Воронка', icon: '03' },
@@ -294,25 +289,9 @@ const pillarByKey = marketingPillars.reduce((acc, pillar) => {
   return acc;
 }, {} as Record<MarketingPillarKey, MarketingPillar>);
 
-const marketingWorkSeed: MarketingWorkItem[] = [
-  { id: 'audience-1', pillar: 'audience', title: 'Собрать 10 интервью по двум сегментам: карта и CRM', status: 'doing', priority: 'high', dueDate: '' },
-  { id: 'audience-2', pillar: 'audience', title: 'Выделить топ-5 болей и критерии покупки из ответов', status: 'todo', priority: 'high', dueDate: '' },
-  { id: 'competitors-1', pillar: 'competitors', title: 'Сравнить 5 прямых и 5 косвенных альтернатив', status: 'todo', priority: 'medium', dueDate: '' },
-  { id: 'competitors-2', pillar: 'competitors', title: 'Выписать слабые места конкурентов для скрипта продаж', status: 'todo', priority: 'medium', dueDate: '' },
-  { id: 'packaging-1', pillar: 'packaging', title: 'Собрать структуру лендинга: боль, решение, доказательства, CTA', status: 'todo', priority: 'high', dueDate: '' },
-  { id: 'packaging-2', pillar: 'packaging', title: 'Описать стартовые условия пилота и тарифную логику', status: 'todo', priority: 'high', dueDate: '' },
-  { id: 'positioning-1', pillar: 'positioning', title: 'Сформулировать позиционирование для карты и CRM отдельно', status: 'todo', priority: 'high', dueDate: '' },
-  { id: 'offer-1', pillar: 'offer', title: 'Подготовить 3 оффера: бесплатно, скидка, партнерские условия', status: 'todo', priority: 'high', dueDate: '' },
-  { id: 'content-1', pillar: 'content', title: 'Собрать контент-матрицу из болей, кейсов и возражений', status: 'todo', priority: 'medium', dueDate: '' },
-  { id: 'ads-1', pillar: 'ads', title: 'Описать рекламные гипотезы и UTM для каждого канала', status: 'todo', priority: 'medium', dueDate: '' },
-  { id: 'sales-1', pillar: 'sales', title: 'Зафиксировать скрипт первого контакта и follow-up правила', status: 'doing', priority: 'high', dueDate: '' },
-  { id: 'analytics-1', pillar: 'analytics', title: 'Назначить еженедельный набор KPI и пороги тревоги', status: 'todo', priority: 'high', dueDate: '' },
-  { id: 'retention-1', pillar: 'retention', title: 'Описать onboarding и критерий активации клиента', status: 'todo', priority: 'medium', dueDate: '' },
-  { id: 'reputation-1', pillar: 'reputation', title: 'Собрать сценарий запроса отзывов и публичных кейсов', status: 'todo', priority: 'medium', dueDate: '' },
-  { id: 'brand-1', pillar: 'brand', title: 'Сформулировать tone of voice и message house бренда', status: 'todo', priority: 'medium', dueDate: '' },
-];
-
-const marketingWorkStorageKey = 'pilotbase_marketing_work_v1';
+const marketingWorkSeed: MarketingWorkItem[] = [];
+const marketingWorkStorageKey = 'pilotbase_marketing_work_v2';
+const marketingGoalsStorageKey = 'pilotbase_marketing_goals_v2';
 
 const workStatusLabel: Record<MarketingWorkStatus, string> = {
   todo: 'План',
@@ -326,175 +305,93 @@ const workPriorityLabel: Record<MarketingWorkPriority, string> = {
   high: 'Высокий',
 };
 
-const marketingGoals: MarketingGoal[] = [
-  {
-    id: 'goal-audience-interviews',
-    pillar: 'audience',
-    title: 'Провести 20 осмысленных интервью',
-    description: 'Достаточная база фактов, чтобы перестать строить позиционирование на догадках.',
-    metric: 'interviewedUsers',
-    target: 20,
-    unit: 'интервью',
-    horizon: '90 дней',
-    priority: 'critical',
-    plan: [
-      'Добавить базовые вопросы для всех сегментов.',
-      'Каждую неделю закрывать минимум 5 интервью.',
-      'После разговора сразу заполнять ответы в карточке лида.',
-      'Раз в неделю выделять повторяющиеся боли и возражения.',
-    ],
-  },
-  {
-    id: 'goal-question-coverage',
-    pillar: 'audience',
-    title: 'Довести заполненность интервью до 80%',
-    description: 'Маркетинг, контент и продажи должны опираться на заполненные ответы, а не на заметки вразнобой.',
-    metric: 'questionCoverage',
-    target: 80,
-    unit: '%',
-    horizon: '90 дней',
-    priority: 'critical',
-    plan: [
-      'Сделать обязательными вопросы про боль, текущий процесс, готовность и условия.',
-      'Фильтровать лидов “Без интервью” и закрывать пробелы каждый день.',
-      'Не переводить лидов в поздние этапы без заполненной анкеты.',
-    ],
-  },
-  {
-    id: 'goal-active-pipeline',
-    pillar: 'sales',
-    title: 'Собрать 50 активных лидов в воронке',
-    description: 'Нужен достаточный объем базы, чтобы видеть закономерности по сегментам, городам и условиям.',
-    metric: 'activeLeads',
-    target: 50,
-    unit: 'лидов',
-    horizon: '90 дней',
-    priority: 'high',
-    plan: [
-      'Каждый день добавлять новые компании из целевых сегментов.',
-      'Фиксировать источник, город, отрасль и следующий шаг.',
-      'Разделять пользователей карты и CRM, чтобы не смешивать офферы.',
-    ],
-  },
-  {
-    id: 'goal-follow-up-discipline',
-    pillar: 'sales',
-    title: 'У 90% активных лидов должен быть следующий контакт',
-    description: 'Продажи не должны зависеть от памяти: у каждого активного лида должен быть понятный next step.',
-    metric: 'contactPlanCoverage',
-    target: 90,
-    unit: '%',
-    horizon: '30 дней',
-    priority: 'critical',
-    plan: [
-      'Каждой новой карточке ставить дату следующего контакта.',
-      'Каждое утро закрывать очередь “Сегодня” и просрочку.',
-      'Использовать быстрые переносы +1/+3/+7/+14 дней вместо пустых дат.',
-    ],
-  },
-  {
-    id: 'goal-hot-leads',
-    pillar: 'offer',
-    title: 'Получить 15 горячих лидов',
-    description: 'Оффер считается живым, когда появляются лиды с высоким score и явным следующим шагом.',
-    metric: 'hotLeads',
-    target: 15,
-    unit: 'лидов',
-    horizon: '90 дней',
-    priority: 'high',
-    plan: [
-      'Проверить 3 варианта оффера: бесплатно, скидка, партнерские условия.',
-      'Поднимать приоритет лидам с явной болью и быстрым сроком запуска.',
-      'Сравнивать score по условиям и сегментам каждую неделю.',
-    ],
-  },
-  {
-    id: 'goal-conversion',
-    pillar: 'sales',
-    title: 'Дойти до 20% подключений от активной базы',
-    description: 'Цель связывает оффер, упаковку и продажи с реальным результатом, а не только с количеством разговоров.',
-    metric: 'conversionRate',
-    target: 20,
-    unit: '%',
-    horizon: '90 дней',
-    priority: 'high',
-    plan: [
-      'Выделить причины отказов и пауз после каждого контакта.',
-      'Усилить оффер для сегментов, где есть интерес, но нет подключения.',
-      'Доводить согласованных клиентов до этапа подключения без разрыва в follow-up.',
-    ],
-  },
-  {
-    id: 'goal-source-hygiene',
-    pillar: 'analytics',
-    title: 'Заполнить источники у 90% лидов',
-    description: 'Без источников невозможно считать каналы, рекламу, контент и реальную стоимость привлечения.',
-    metric: 'sourceCoverage',
-    target: 90,
-    unit: '%',
-    horizon: '30 дней',
-    priority: 'critical',
-    plan: [
-      'Заполнять источник при создании каждой карточки.',
-      'Раз в неделю исправлять старые записи без source.',
-      'Использовать единые названия каналов: Telegram, Instagram, рекомендации, поиск, реклама.',
-    ],
-  },
-  {
-    id: 'goal-growth-readiness',
-    pillar: 'analytics',
-    title: 'Поднять готовность Growth OS до 80%',
-    description: 'Это интегральная цель: система должна быть готова по исследованиям, офферу, продажам, аналитике и доверию.',
-    metric: 'marketingReadiness',
-    target: 80,
-    unit: '%',
-    horizon: '90 дней',
-    priority: 'critical',
-    plan: [
-      'Закрывать сначала блокеры, от которых зависят другие направления.',
-      'Переводить задачи Growth OS из “План” в “В работе” только с понятным результатом.',
-      'Не запускать рекламу масштабно, пока оффер, контент и аналитика ниже 50%.',
-    ],
-  },
-  {
-    id: 'goal-reputation-cases',
-    pillar: 'reputation',
-    title: 'Получить 5 кандидатов на кейсы и отзывы',
-    description: 'Репутация начинается не после большого запуска, а после первых подключенных клиентов.',
-    metric: 'caseCandidates',
-    target: 5,
-    unit: 'клиентов',
-    horizon: '90 дней',
-    priority: 'medium',
-    plan: [
-      'После подключения фиксировать, можно ли сделать публичный кейс.',
-      'Просить короткий отзыв после первой успешной пользы.',
-      'Выделять истории по сегментам: карта, CRM, разные отрасли.',
-    ],
-  },
-  {
-    id: 'goal-brand-content',
-    pillar: 'brand',
-    title: 'Довести бренд и контент до 70% готовности',
-    description: 'Контент и бренд должны говорить одним языком: боли, оффер, доказательства и тон коммуникации.',
-    metric: 'contentBrandReadiness',
-    target: 70,
-    unit: '%',
-    horizon: '90 дней',
-    priority: 'medium',
-    plan: [
-      'Собрать message house из позиционирования, оффера и повторяющихся болей.',
-      'Сделать контент-матрицу: боли, кейсы, возражения, сравнения, запуск.',
-      'Сверить tone of voice во всех каналах и материалах.',
-    ],
-  },
-];
-
 const goalPriorityLabel: Record<MarketingGoalPriority, string> = {
   critical: 'Критично',
   high: 'Высокий',
   medium: 'Средний',
 };
+
+const goalStatusLabel: Record<MarketingGoalStatus, string> = {
+  active: 'Активна',
+  paused: 'Пауза',
+  done: 'Достигнута',
+};
+
+const emptyGoalInput: MarketingGoalInput = {
+  pillar: 'audience',
+  title: '',
+  description: '',
+  current: 0,
+  target: 100,
+  unit: '%',
+  deadline: '',
+  priority: 'high',
+  status: 'active',
+  planText: '',
+  achievementsText: '',
+};
+
+const emptyMarketingGoals: MarketingGoal[] = [];
+const localStorageUpdateEventPrefix = 'pilotbase-local-storage';
+
+type LocalStateUpdate<T> = T | ((current: T) => T);
+
+function createStoredArrayReader<T>(key: string, fallback: T[]) {
+  let cachedRaw: string | null | undefined;
+  let cachedValue = fallback;
+
+  return function readStoredArray() {
+    if (typeof window === 'undefined') return fallback;
+
+    const raw = window.localStorage.getItem(key);
+    if (raw === cachedRaw) return cachedValue;
+
+    cachedRaw = raw;
+    if (!raw) {
+      cachedValue = fallback;
+      return cachedValue;
+    }
+
+    try {
+      const parsed = JSON.parse(raw) as T[];
+      cachedValue = Array.isArray(parsed) && parsed.length > 0 ? parsed : fallback;
+    } catch {
+      cachedValue = fallback;
+    }
+    return cachedValue;
+  };
+}
+
+const readStoredMarketingWorkItems = createStoredArrayReader<MarketingWorkItem>(marketingWorkStorageKey, marketingWorkSeed);
+const readStoredMarketingGoals = createStoredArrayReader<MarketingGoal>(marketingGoalsStorageKey, emptyMarketingGoals);
+
+function subscribeStorageKey(key: string, callback: () => void) {
+  if (typeof window === 'undefined') return () => undefined;
+
+  const customEventName = `${localStorageUpdateEventPrefix}:${key}`;
+  const handleStorage = (event: StorageEvent) => {
+    if (event.key === key) callback();
+  };
+  const handleCustomUpdate = () => callback();
+
+  window.addEventListener('storage', handleStorage);
+  window.addEventListener(customEventName, handleCustomUpdate);
+
+  return () => {
+    window.removeEventListener('storage', handleStorage);
+    window.removeEventListener(customEventName, handleCustomUpdate);
+  };
+}
+
+function writeStoredArray<T>(key: string, value: T[]) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(key, JSON.stringify(value));
+  window.dispatchEvent(new Event(`${localStorageUpdateEventPrefix}:${key}`));
+}
+
+function resolveLocalStateUpdate<T>(update: LocalStateUpdate<T>, current: T) {
+  return typeof update === 'function' ? (update as (value: T) => T)(current) : update;
+}
 
 const emptyInput: EarlyUserInput = {
   profile_role: 'crm',
@@ -731,6 +628,24 @@ function clampScore(value: number) {
   return Math.max(0, Math.min(100, Math.round(value)));
 }
 
+function splitGoalLines(text: string) {
+  return text
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+function formatGoalValue(value: number, unit: string) {
+  const formattedValue = Number.isInteger(value) ? String(value) : value.toFixed(1);
+  return unit.trim() === '%' ? `${formattedValue}%` : `${formattedValue} ${unit.trim() || 'ед.'}`;
+}
+
+function goalProgress(goal: Pick<MarketingGoal, 'current' | 'target' | 'status'>) {
+  if (goal.status === 'done') return 100;
+  if (goal.target <= 0) return 0;
+  return clampScore((goal.current / goal.target) * 100);
+}
+
 export default function DashboardClient({ initialUsers, initialQuestions, initialAnswers, initialError }: Props) {
   const supabase = useMemo(() => createClient(), []);
   const selectionRequestRef = useRef(0);
@@ -772,17 +687,26 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
   const [activePillar, setActivePillar] = useState<MarketingPillarKey>('audience');
   const [newWorkTitle, setNewWorkTitle] = useState('');
   const [newWorkPriority, setNewWorkPriority] = useState<MarketingWorkPriority>('medium');
-  const [marketingWorkItems, setMarketingWorkItems] = useState<MarketingWorkItem[]>(() => {
-    if (typeof window === 'undefined') return marketingWorkSeed;
-    try {
-      const raw = window.localStorage.getItem(marketingWorkStorageKey);
-      if (!raw) return marketingWorkSeed;
-      const parsed = JSON.parse(raw) as MarketingWorkItem[];
-      return Array.isArray(parsed) && parsed.length > 0 ? parsed : marketingWorkSeed;
-    } catch {
-      return marketingWorkSeed;
-    }
-  });
+  const [goalForm, setGoalForm] = useState<MarketingGoalInput>(() => ({ ...emptyGoalInput }));
+  const [editingGoalId, setEditingGoalId] = useState<string | null>(null);
+  const marketingGoals = useSyncExternalStore(
+    (callback) => subscribeStorageKey(marketingGoalsStorageKey, callback),
+    readStoredMarketingGoals,
+    () => emptyMarketingGoals,
+  );
+  const marketingWorkItems = useSyncExternalStore(
+    (callback) => subscribeStorageKey(marketingWorkStorageKey, callback),
+    readStoredMarketingWorkItems,
+    () => marketingWorkSeed,
+  );
+  const setMarketingGoals = useCallback((update: LocalStateUpdate<MarketingGoal[]>) => {
+    const next = resolveLocalStateUpdate(update, readStoredMarketingGoals());
+    writeStoredArray(marketingGoalsStorageKey, next);
+  }, []);
+  const setMarketingWorkItems = useCallback((update: LocalStateUpdate<MarketingWorkItem[]>) => {
+    const next = resolveLocalStateUpdate(update, readStoredMarketingWorkItems());
+    writeStoredArray(marketingWorkStorageKey, next);
+  }, []);
 
   const questionsSorted = useMemo(
     () => [...questions].sort((a, b) => a.sort_order - b.sort_order || a.created_at.localeCompare(b.created_at)),
@@ -953,10 +877,6 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
   }, [savedViews]);
 
   useEffect(() => {
-    window.localStorage.setItem(marketingWorkStorageKey, JSON.stringify(marketingWorkItems));
-  }, [marketingWorkItems]);
-
-  useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key !== 'Escape') return;
       if (modalOpen) {
@@ -993,10 +913,98 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
     setMarketingWorkItems((current) => current.map((item) => (item.id === id ? { ...item, ...patch } : item)));
   }
 
+  function updateGoalForm<K extends keyof MarketingGoalInput>(key: K, value: MarketingGoalInput[K]) {
+    setGoalForm((current) => ({ ...current, [key]: value }));
+  }
+
+  function resetGoalForm(pillar: MarketingPillarKey = activePillar) {
+    setEditingGoalId(null);
+    setGoalForm({ ...emptyGoalInput, pillar });
+  }
+
+  function saveMarketingGoal() {
+    const title = goalForm.title.trim();
+    if (!title) {
+      setNotice('Укажи название цели.');
+      return;
+    }
+
+    const target = Number.isFinite(goalForm.target) && goalForm.target > 0 ? goalForm.target : 0;
+    if (target <= 0) {
+      setNotice('Целевое значение должно быть больше нуля.');
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const normalized: MarketingGoalInput = {
+      ...goalForm,
+      title,
+      description: goalForm.description.trim(),
+      current: Math.max(0, Number.isFinite(goalForm.current) ? goalForm.current : 0),
+      target,
+      unit: goalForm.unit.trim() || 'ед.',
+      deadline: goalForm.deadline,
+      planText: goalForm.planText.trim(),
+      achievementsText: goalForm.achievementsText.trim(),
+    };
+
+    if (editingGoalId) {
+      setMarketingGoals((current) => current.map((goal) => (
+        goal.id === editingGoalId ? { ...goal, ...normalized, updatedAt: now } : goal
+      )));
+      setNotice(`Цель «${title}» обновлена.`);
+    } else {
+      setMarketingGoals((current) => [{
+        ...normalized,
+        id: `goal-${Date.now()}`,
+        createdAt: now,
+        updatedAt: now,
+      }, ...current]);
+      setNotice(`Цель «${title}» добавлена.`);
+    }
+
+    resetGoalForm();
+  }
+
+  function editMarketingGoal(goal: MarketingGoal) {
+    setEditingGoalId(goal.id);
+    setActivePillar(goal.pillar);
+    setGoalForm({
+      pillar: goal.pillar,
+      title: goal.title,
+      description: goal.description,
+      current: goal.current,
+      target: goal.target,
+      unit: goal.unit,
+      deadline: goal.deadline,
+      priority: goal.priority,
+      status: goal.status,
+      planText: goal.planText,
+      achievementsText: goal.achievementsText,
+    });
+  }
+
+  function completeMarketingGoal(id: string) {
+    setMarketingGoals((current) => current.map((goal) => (
+      goal.id === id
+        ? { ...goal, status: 'done', current: Math.max(goal.current, goal.target), updatedAt: new Date().toISOString() }
+        : goal
+    )));
+  }
+
+  function deleteMarketingGoal(id: string) {
+    const goal = marketingGoals.find((item) => item.id === id);
+    const ok = confirm(`Удалить цель${goal ? ` «${goal.title}»` : ''}?`);
+    if (!ok) return;
+    setMarketingGoals((current) => current.filter((item) => item.id !== id));
+    if (editingGoalId === id) resetGoalForm();
+    setNotice('Цель удалена.');
+  }
+
   function addMarketingWorkItem() {
     const title = newWorkTitle.trim();
     if (!title) {
-      setNotice('Укажи название задачи для Growth OS.');
+      setNotice('Укажи название задачи для плана роста.');
       return;
     }
 
@@ -1013,13 +1021,15 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
     setNotice(`Задача добавлена в блок «${pillarByKey[activePillar].label}».`);
   }
 
-  function resetMarketingWorkPlan() {
-    const ok = confirm('Вернуть стартовый Growth OS план? Текущие локальные задачи будут заменены.');
+  function clearGrowthPlan() {
+    const ok = confirm('Очистить цели и задачи плана роста в этом браузере?');
     if (!ok) return;
-    setMarketingWorkItems(marketingWorkSeed);
+    setMarketingGoals([]);
+    setMarketingWorkItems([]);
     setActivePillar('audience');
     setNewWorkTitle('');
-    setNotice('Стартовый Growth OS план восстановлен.');
+    resetGoalForm('audience');
+    setNotice('План роста очищен.');
   }
 
   function saveCurrentView() {
@@ -1816,51 +1826,26 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
     ?? marketingWorkItems.find((item) => item.status !== 'done')
     ?? null;
   const marketingWorkDone = marketingWorkItems.filter((item) => item.status === 'done').length;
-  const growthGoalFacts = useMemo(() => {
-    const activeUserCount = users.filter((user) => !user.is_archived && !['Отказ', 'Архив'].includes(user.stage)).length;
-    const usersWithAnyAnswer = new Set(
-      answers
-        .filter((answer) => answer.answer_text?.trim())
-        .map((answer) => answer.early_user_id),
-    ).size;
-    const usersWithSource = users.filter((user) => user.source?.trim()).length;
-    const usersWithContactDate = users.filter((user) => user.next_contact_date && !user.is_archived && !['Отказ', 'Архив'].includes(user.stage)).length;
-    const connectedOrActive = users.filter((user) => ['Подключён', 'Активно пользуется'].includes(user.stage)).length;
-    const contentScore = marketingPillarStats.find((pillar) => pillar.key === 'content')?.score ?? 0;
-    const brandScore = marketingPillarStats.find((pillar) => pillar.key === 'brand')?.score ?? 0;
-
-    return {
-      interviewedUsers: usersWithAnyAnswer,
-      questionCoverage,
-      activeLeads: activeUserCount,
-      contactPlanCoverage: percent(usersWithContactDate, activeUserCount),
-      hotLeads: hotLeadCount,
-      conversionRate,
-      sourceCoverage: percent(usersWithSource, users.length),
-      marketingReadiness,
-      caseCandidates: connectedOrActive,
-      contentBrandReadiness: Math.round((contentScore + brandScore) / 2),
-    } satisfies Record<MarketingGoalMetric, number>;
-  }, [users, answers, questionCoverage, hotLeadCount, conversionRate, marketingReadiness, marketingPillarStats]);
-  const computedMarketingGoals = useMemo(() => marketingGoals.map((goal) => {
-    const current = growthGoalFacts[goal.metric];
-    const progress = goal.target > 0 ? clampScore((current / goal.target) * 100) : 0;
-    return {
-      ...goal,
-      current,
-      progress,
-      gap: Math.max(0, goal.target - current),
-    };
-  }), [growthGoalFacts]);
+  const computedMarketingGoals = useMemo(() => marketingGoals.map((goal) => ({
+    ...goal,
+    progress: goalProgress(goal),
+    gap: Math.max(0, goal.target - goal.current),
+    planItems: splitGoalLines(goal.planText),
+    achievementItems: splitGoalLines(goal.achievementsText),
+  })), [marketingGoals]);
   const sortedMarketingGoals = useMemo(() => [...computedMarketingGoals].sort((a, b) => {
     const priorityWeightByGoal: Record<MarketingGoalPriority, number> = { critical: 0, high: 1, medium: 2 };
-    return a.progress - b.progress || priorityWeightByGoal[a.priority] - priorityWeightByGoal[b.priority];
+    const statusWeightByGoal: Record<MarketingGoalStatus, number> = { active: 0, paused: 1, done: 2 };
+    return statusWeightByGoal[a.status] - statusWeightByGoal[b.status]
+      || a.progress - b.progress
+      || priorityWeightByGoal[a.priority] - priorityWeightByGoal[b.priority]
+      || a.updatedAt.localeCompare(b.updatedAt);
   }), [computedMarketingGoals]);
-  const achievedMarketingGoals = computedMarketingGoals.filter((goal) => goal.progress >= 100).length;
+  const achievedMarketingGoals = computedMarketingGoals.filter((goal) => goal.status === 'done' || goal.progress >= 100).length;
   const averageGoalProgress = computedMarketingGoals.length > 0
     ? Math.round(computedMarketingGoals.reduce((sum, goal) => sum + goal.progress, 0) / computedMarketingGoals.length)
     : 0;
-  const immediateGoalPlan = sortedMarketingGoals.filter((goal) => goal.progress < 100).slice(0, 3);
+  const immediateGoalPlan = sortedMarketingGoals.filter((goal) => goal.status !== 'done' && goal.progress < 100).slice(0, 3);
   const selectedAnswerCount = selected ? getAnswerCount(selected.id, selected.profile_role) : 0;
   const selectedTotalQuestions = selected ? getTotalQuestionsForRole(selected.profile_role) : 0;
   const selectedAnswerProgress = selectedTotalQuestions > 0 ? Math.round((selectedAnswerCount / selectedTotalQuestions) * 100) : 0;
@@ -1869,8 +1854,31 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
     : 0;
 
   function exportMarketingPlan() {
+    const goalLines = sortedMarketingGoals.length === 0
+      ? ['Целей пока нет.', '']
+      : sortedMarketingGoals.flatMap((goal) => [
+        `### ${goal.title} — ${goal.progress}%`,
+        `Направление: ${pillarByKey[goal.pillar].label}`,
+        `Статус: ${goalStatusLabel[goal.status]}`,
+        `Приоритет: ${goalPriorityLabel[goal.priority]}`,
+        `Факт: ${formatGoalValue(goal.current, goal.unit)}`,
+        `Цель: ${formatGoalValue(goal.target, goal.unit)}`,
+        `Срок: ${goal.deadline ? formatDate(goal.deadline) : 'не задан'}`,
+        goal.description ? `Описание: ${goal.description}` : 'Описание: не добавлено',
+        'План достижения:',
+        ...(goal.planItems.length > 0 ? goal.planItems.map((step) => `- ${step}`) : ['- План пока не записан']),
+        'Достижения:',
+        ...(goal.achievementItems.length > 0 ? goal.achievementItems.map((item) => `- ${item}`) : ['- Достижений пока нет']),
+        '',
+      ]);
+    const openWorkItems = marketingWorkItems.filter((item) => item.status !== 'done');
+    const workLines = openWorkItems.length === 0
+      ? ['Открытых задач пока нет.', '']
+      : openWorkItems.map((item) => (
+        `- [${workPriorityLabel[item.priority]}] ${pillarByKey[item.pillar].label}: ${item.title} (${workStatusLabel[item.status]})`
+      ));
     const lines = [
-      '# PilotBase Growth OS',
+      '# PilotBase: План роста',
       '',
       `Дата: ${localDateStamp()}`,
       `Общая готовность: ${marketingReadiness}%`,
@@ -1879,16 +1887,7 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
       '',
       '## Цели',
       '',
-      ...sortedMarketingGoals.flatMap((goal) => [
-        `### ${goal.title} — ${goal.progress}%`,
-        `Направление: ${pillarByKey[goal.pillar].label}`,
-        `Факт: ${goal.current}${goal.unit === '%' ? '%' : ` ${goal.unit}`}`,
-        `План: ${goal.target}${goal.unit === '%' ? '%' : ` ${goal.unit}`}`,
-        `Горизонт: ${goal.horizon}`,
-        'План достижения:',
-        ...goal.plan.map((step) => `- ${step}`),
-        '',
-      ]),
+      ...goalLines,
       '',
       '## Направления',
       '',
@@ -1903,12 +1902,10 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
       ]),
       '## Открытые задачи',
       '',
-      ...marketingWorkItems
-        .filter((item) => item.status !== 'done')
-        .map((item) => `- [${workPriorityLabel[item.priority]}] ${pillarByKey[item.pillar].label}: ${item.title} (${workStatusLabel[item.status]})`),
+      ...workLines,
       '',
     ];
-    downloadTextFile(`pilotbase-growth-os-${localDateStamp()}.md`, lines.join('\n'), 'text/markdown;charset=utf-8');
+    downloadTextFile(`pilotbase-plan-rosta-${localDateStamp()}.md`, lines.join('\n'), 'text/markdown;charset=utf-8');
   }
 
   return (
@@ -1980,7 +1977,7 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
         <section className="metrics-grid">
           {viewMode === 'growth' ? (
             <>
-              <MetricCard label="Готовность Growth OS" value={`${marketingReadiness}%`} icon="OS" />
+              <MetricCard label="Готовность плана" value={`${marketingReadiness}%`} icon="PL" />
               <MetricCard label="Прогресс целей" value={`${averageGoalProgress}%`} icon="GL" />
               <MetricCard label="Целей достигнуто" value={`${achievedMarketingGoals}/${computedMarketingGoals.length}`} icon="OK" />
               <MetricCard label="Задачи" value={`${marketingWorkDone}/${marketingWorkItems.length}`} icon="WK" />
@@ -2134,7 +2131,7 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
             {viewMode === 'growth' ? (
               <div className="export-actions">
                 <button className="secondary-button" onClick={exportMarketingPlan} type="button"><span aria-hidden="true">↓</span> Markdown</button>
-                <button className="secondary-button" onClick={resetMarketingWorkPlan} type="button"><span aria-hidden="true">↻</span> Шаблон</button>
+                <button className="secondary-button" onClick={clearGrowthPlan} type="button"><span aria-hidden="true">×</span> Очистить</button>
               </div>
             ) : (
               <div className="export-actions">
@@ -2180,7 +2177,7 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
               <div className="card-heading">
                 <div>
                   <h2>Цели и план достижения</h2>
-                  <p>Цели выставлены автоматически на основе текущей стадии проекта. Прогресс считается из CRM, интервью и Growth OS.</p>
+                  <p>Записывай свои цели, план действий и уже полученные достижения. Прогресс считается по твоим значениям.</p>
                 </div>
                 <div className={`readiness-badge ${scoreClass(averageGoalProgress)}`}>
                   <span>Цели</span>
@@ -2188,25 +2185,158 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
                 </div>
               </div>
 
+              <div className="goal-editor">
+                <div className="goal-editor-head">
+                  <div>
+                    <h3>{editingGoalId ? 'Редактирование цели' : 'Новая цель'}</h3>
+                    <p>Сформулируй результат, срок, план и фактические достижения.</p>
+                  </div>
+                  {editingGoalId && (
+                    <button className="secondary-button" onClick={() => resetGoalForm()} type="button">Отмена</button>
+                  )}
+                </div>
+                <div className="goal-form-grid">
+                  <label>
+                    <span>Название цели</span>
+                    <input
+                      value={goalForm.title}
+                      onChange={(event) => updateGoalForm('title', event.target.value)}
+                      placeholder="Например: Получить 15 заявок из контента"
+                    />
+                  </label>
+                  <label>
+                    <span>Направление</span>
+                    <select value={goalForm.pillar} onChange={(event) => updateGoalForm('pillar', event.target.value as MarketingPillarKey)}>
+                      {marketingPillars.map((pillar) => <option key={pillar.key} value={pillar.key}>{pillar.label}</option>)}
+                    </select>
+                  </label>
+                  <label>
+                    <span>Сейчас</span>
+                    <input
+                      min="0"
+                      type="number"
+                      value={goalForm.current}
+                      onChange={(event) => updateGoalForm('current', Number(event.target.value))}
+                    />
+                  </label>
+                  <label>
+                    <span>Цель</span>
+                    <input
+                      min="1"
+                      type="number"
+                      value={goalForm.target}
+                      onChange={(event) => updateGoalForm('target', Number(event.target.value))}
+                    />
+                  </label>
+                  <label>
+                    <span>Единица</span>
+                    <input
+                      value={goalForm.unit}
+                      onChange={(event) => updateGoalForm('unit', event.target.value)}
+                      placeholder="%, лиды, заявки"
+                    />
+                  </label>
+                  <label>
+                    <span>Срок</span>
+                    <input type="date" value={goalForm.deadline} onChange={(event) => updateGoalForm('deadline', event.target.value)} />
+                  </label>
+                  <label>
+                    <span>Приоритет</span>
+                    <select value={goalForm.priority} onChange={(event) => updateGoalForm('priority', event.target.value as MarketingGoalPriority)}>
+                      {(Object.keys(goalPriorityLabel) as MarketingGoalPriority[]).map((priority) => (
+                        <option key={priority} value={priority}>{goalPriorityLabel[priority]}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    <span>Статус</span>
+                    <select value={goalForm.status} onChange={(event) => updateGoalForm('status', event.target.value as MarketingGoalStatus)}>
+                      {(Object.keys(goalStatusLabel) as MarketingGoalStatus[]).map((status) => (
+                        <option key={status} value={status}>{goalStatusLabel[status]}</option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                <label className="goal-wide-field">
+                  <span>Описание</span>
+                  <textarea
+                    rows={3}
+                    value={goalForm.description}
+                    onChange={(event) => updateGoalForm('description', event.target.value)}
+                    placeholder="Почему эта цель важна и какой результат должен быть понятен в конце цикла"
+                  />
+                </label>
+                <div className="goal-notes-grid">
+                  <label>
+                    <span>План достижения</span>
+                    <textarea
+                      rows={5}
+                      value={goalForm.planText}
+                      onChange={(event) => updateGoalForm('planText', event.target.value)}
+                      placeholder="Каждый шаг с новой строки"
+                    />
+                  </label>
+                  <label>
+                    <span>Достижения</span>
+                    <textarea
+                      rows={5}
+                      value={goalForm.achievementsText}
+                      onChange={(event) => updateGoalForm('achievementsText', event.target.value)}
+                      placeholder="Что уже сделано, проверено или получено"
+                    />
+                  </label>
+                </div>
+                <div className="goal-actions">
+                  <button className="primary-button" onClick={saveMarketingGoal} type="button">
+                    <span aria-hidden="true">{editingGoalId ? '✓' : '+'}</span>
+                    {editingGoalId ? 'Сохранить цель' : 'Добавить цель'}
+                  </button>
+                  <span>{computedMarketingGoals.length === 0 ? 'Создай первую цель, и здесь появится рабочий цикл.' : `В плане целей: ${computedMarketingGoals.length}`}</span>
+                </div>
+              </div>
+
               <div className="goal-grid">
-                {sortedMarketingGoals.map((goal) => (
-                  <article className="goal-card" key={goal.id}>
+                {sortedMarketingGoals.length === 0 ? (
+                  <div className="goal-empty">
+                    <strong>Целей пока нет</strong>
+                    <p>Добавь первую цель выше: например, по аудитории, офферу, продажам или удержанию. План и достижения будут храниться рядом с ней.</p>
+                  </div>
+                ) : sortedMarketingGoals.map((goal) => (
+                  <article className={goal.status === 'done' ? 'goal-card done' : 'goal-card'} key={goal.id}>
                     <div className="goal-head">
                       <div>
                         <span>{pillarByKey[goal.pillar].label} · {goalPriorityLabel[goal.priority]}</span>
                         <h3>{goal.title}</h3>
                       </div>
-                      <b className={`score-pill ${scoreClass(goal.progress)}`}>{goal.progress}%</b>
+                      <div className="goal-head-meta">
+                        <b className={`score-pill ${scoreClass(goal.progress)}`}>{goal.progress}%</b>
+                        <em className={`goal-status ${goal.status}`}>{goalStatusLabel[goal.status]}</em>
+                      </div>
                     </div>
-                    <p>{goal.description}</p>
+                    <p>{goal.description || 'Описание пока не добавлено.'}</p>
                     <div className="goal-values">
-                      <strong>{goal.current}{goal.unit === '%' ? '%' : ''}</strong>
-                      <span>из {goal.target}{goal.unit === '%' ? '%' : ` ${goal.unit}`} · {goal.horizon}</span>
+                      <strong>{formatGoalValue(goal.current, goal.unit)}</strong>
+                      <span>из {formatGoalValue(goal.target, goal.unit)} · {goal.deadline ? `до ${formatDate(goal.deadline)}` : 'срок не задан'}</span>
                     </div>
                     <div className="progress-line"><span style={{ width: `${goal.progress}%` }} /></div>
                     <div className="goal-plan">
-                      <strong>{goal.gap > 0 ? `Осталось: ${Math.ceil(goal.gap)}${goal.unit === '%' ? '%' : ` ${goal.unit}`}` : 'Цель достигнута'}</strong>
-                      {goal.plan.slice(0, 3).map((step) => <span key={step}>{step}</span>)}
+                      <strong>{goal.gap > 0 && goal.status !== 'done' ? `Осталось: ${formatGoalValue(goal.gap, goal.unit)}` : 'Цель достигнута'}</strong>
+                      {goal.planItems.length > 0
+                        ? goal.planItems.slice(0, 4).map((step) => <span key={step}>{step}</span>)
+                        : <span>План пока не записан.</span>}
+                    </div>
+                    <div className="goal-plan achievements">
+                      <strong>Достижения</strong>
+                      {goal.achievementItems.length > 0
+                        ? goal.achievementItems.slice(0, 3).map((item) => <span key={item}>{item}</span>)
+                        : <span>Достижения пока не добавлены.</span>}
+                    </div>
+                    <div className="goal-card-actions">
+                      <button className="secondary-button" onClick={() => editMarketingGoal(goal)} type="button">Изменить</button>
+                      {goal.status !== 'done' && (
+                        <button className="secondary-button" onClick={() => completeMarketingGoal(goal.id)} type="button">Достигнута</button>
+                      )}
+                      <button className="secondary-button danger" onClick={() => deleteMarketingGoal(goal.id)} type="button">Удалить</button>
                     </div>
                   </article>
                 ))}
@@ -2217,7 +2347,7 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
               <div className="card-heading">
                 <div>
                   <h2>Что делать первым</h2>
-                  <p>План отсортирован по разрыву до цели и критичности для системы.</p>
+                  <p>Сначала показываются активные цели с самым слабым прогрессом и высоким приоритетом.</p>
                 </div>
               </div>
               <div className="next-step-list">
@@ -2226,12 +2356,14 @@ export default function DashboardClient({ initialUsers, initialQuestions, initia
                     <span>{index + 1}</span>
                     <div>
                       <strong>{goal.title}</strong>
-                      <p>{goal.plan[0]}</p>
-                      <small>{pillarByKey[goal.pillar].label} · сейчас {goal.current}{goal.unit === '%' ? '%' : ` ${goal.unit}`} из {goal.target}{goal.unit === '%' ? '%' : ` ${goal.unit}`}</small>
+                      <p>{goal.planItems[0] || 'Добавь первый шаг в плане достижения цели.'}</p>
+                      <small>{pillarByKey[goal.pillar].label} · сейчас {formatGoalValue(goal.current, goal.unit)} из {formatGoalValue(goal.target, goal.unit)}</small>
                     </div>
                   </article>
                 ))}
-                {immediateGoalPlan.length === 0 && <span className="muted">Все цели достигнуты. Можно ставить следующий цикл.</span>}
+                {immediateGoalPlan.length === 0 && (
+                  <span className="muted">{computedMarketingGoals.length === 0 ? 'Добавь первую цель, чтобы появился приоритетный план.' : 'Все активные цели закрыты. Можно ставить следующий цикл.'}</span>
+                )}
               </div>
             </section>
 
